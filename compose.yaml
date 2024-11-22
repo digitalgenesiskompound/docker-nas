@@ -10,14 +10,13 @@ services:
       - USERNAME=${USERNAME}
       - VOLUME=${VOLUME}
     volumes:
-      - ${VOLUME}
+      - nas:${VOLUME}
     ports:
       - "8080:5000"
     networks:
       - nas-network
-
 volumes:
-  - ${VOLUME}
+  nas: 
 
 networks:
   nas-network:
