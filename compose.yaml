@@ -17,7 +17,7 @@ services:
       - nas-network
 
 volumes:
-  ${VOLUME}
+  - ${VOLUME}
 
 networks:
   nas-network:
