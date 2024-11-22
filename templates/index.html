@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker Volume Explorer</title>
+    <link rel="stylesheet" type="text/css" href="/static/styles.css">
+    <!-- Bootstrap Icons for visual cues -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <!-- Monaco Editor CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.1/min/vs/loader.min.js"></script>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Navigation</h2>
+        <ul id="sidebar-list">
+            <!-- Sidebar items will be dynamically loaded here -->
+        </ul>
+    </div>
+    <div class="main-content">
+        <h1>📁 Docker Volume Explorer</h1>
+        
+        <!-- Progress Bar -->
+        <div id="progress-container" class="progress-container" style="display: none;">
+            <div class="progress-bar" id="progress-bar"></div>
+            <span id="progress-text">0%</span>
+        </div>
+        
+        <!-- Breadcrumb Navigation with Back and Home Buttons -->
+        <div class="breadcrumbs">
+            <div class="nav-buttons">
+                <button class="nav-button" id="back-button"><i class="bi bi-arrow-left"></i> Back</button>
+                <button class="nav-button" id="home-button"><i class="bi bi-house-door-fill"></i> Home</button>
+            </div>
+            <div class="breadcrumb-links" id="breadcrumb-links">
+                <a href="#" data-path="">Root</a>
+            </div>
+        </div>
+        
+        <!-- Action Buttons, Upload, Search Bar, and Sort Dropdown -->
+        <div class="action-group">
+            <div class="button-group">
+                <button id="download-all-button" class="download-button" onclick="downloadAll()">Download All as ZIP</button>
+                <button id="upload-button" class="upload-button" onclick="document.getElementById('upload-input').click()">Upload</button>
+                <input type="file" id="upload-input" style="display: none;" multiple onchange="uploadFiles()">
+            </div>
+            <div class="search-sort-group">
+                <input type="text" id="search-bar" placeholder="Search files and folders..." oninput="searchFiles()">
+                <select id="sort-dropdown" onchange="sortFiles()">
+                    <option value="name_asc">Name (A-Z)</option>
+                    <option value="name_desc">Name (Z-A)</option>
+                    <option value="date_asc">Date Modified (Oldest)</option>
+                    <option value="date_desc">Date Modified (Newest)</option>
+                    <option value="size_asc">Size (Smallest)</option>
+                    <option value="size_desc">Size (Largest)</option>
+                </select>
+            </div>
+        </div>
+        
+        <!-- Directory and File Listing -->
+        <form id="file-list-form">
+            <ul class="file-list" id="file-list">
+                <!-- Content will be dynamically loaded here -->
+            </ul>
+        </form>
+    </div>
+
+    <!-- Selected Items Side Panel -->
+    <div id="selected-items-panel" class="selected-items-panel">
+        <button class="close-button" onclick="closeSelectedItemsPanel()">&times;</button>
+        <h3>Selected Items</h3>
+        <ul id="selected-items-list">
+            <!-- Selected items will be listed here -->
+        </ul>
+        <button class="side-panel-button" onclick="performAction('download')">Download Selected</button>
+        <button class="side-panel-button" onclick="performAction('edit')">Edit Selected</button> <!-- New Edit Button -->
+        <button class="delete-button side-panel-button" onclick="performAction('delete')">Delete Selected</button>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div id="loading" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+    </div>
+
+<!-- Monaco Editor Modal -->
+<div id="editor-modal" class="editor-modal" style="display: none;">
+    <div class="editor-modal-content">
+        <button class="close-editor" onclick="closeEditor()">&times;</button> <!-- Close Button -->
+        <div id="editor" style="width: 100%; height: 80vh;"></div>
+        <div class="editor-buttons">
+            <button id="save-editor-button" class="side-panel-button" onclick="saveEditor()">Save</button>
+            <button id="close-editor-button" class="side-panel-button" onclick="closeEditor()">Close</button> <!-- Close Button -->
+        </div>
+    </div>
+</div>
+
+    <!-- Reference to External JavaScript File -->
+    <script src="/static/scripts.js"></script>
+</body>
+</html>
