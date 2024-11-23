@@ -1,15 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Docker Volume Explorer</title>
-    <link rel="stylesheet" type="text/css" href="/static/styles.css">
-    <!-- Bootstrap Icons for visual cues -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-    <!-- Monaco Editor CDN -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.1/min/vs/loader.min.js"></script>
-</head>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Docker Volume Explorer</title>
+        
+        <!-- Load Bootstrap CSS first -->
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+        
+        <!-- Bootstrap Icons for visual cues -->
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+        
+        <!-- Load custom styles after Bootstrap -->
+        <link rel="stylesheet" type="text/css" href="/static/styles.css">
+        
+        <!-- Monaco Editor CDN -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.1/min/vs/loader.min.js"></script>
+    </head>
 <body>
     <div class="sidebar">
         <h2>Navigation</h2>
@@ -19,13 +26,6 @@
     </div>
     <div class="main-content">
         <h1>📁 Docker Volume Explorer</h1>
-        
-        <!-- Progress Bar -->
-        <div id="progress-container" class="progress-container" style="display: none;">
-            <div class="progress-bar" id="progress-bar"></div>
-            <span id="progress-text">0%</span>
-        </div>
-        
         <!-- Breadcrumb Navigation with Back and Home Buttons -->
         <div class="breadcrumbs">
             <div class="nav-buttons">
@@ -42,6 +42,12 @@
             <div class="button-group">
                 <button id="download-all-button" class="download-button" onclick="downloadAll()">Download All as ZIP</button>
                 <button id="upload-button" class="upload-button" onclick="document.getElementById('upload-input').click()">Upload</button>
+                <!-- Updated "Add Folder" Button -->
+                <button id="add-folder-button" class="add-folder-button" onclick="openAddFolderModal()">Add Folder</button>
+                <!-- Updated "Add File" Button -->
+                <button id="add-file-button" class="add-file-button" onclick="openAddFileModal()">Add File</button>
+                <!-- "Move Selected" Button remains commented out -->
+                <!-- <button id="move-selected-button" class="move-button" onclick="openMoveModal()">Move Selected</button> -->
                 <input type="file" id="upload-input" style="display: none;" multiple onchange="uploadFiles()">
             </div>
             <div class="search-sort-group">
@@ -73,13 +79,29 @@
             <!-- Selected items will be listed here -->
         </ul>
         <button class="side-panel-button" onclick="performAction('download')">Download Selected</button>
-        <button class="side-panel-button" onclick="performAction('edit')">Edit Selected</button> <!-- New Edit Button -->
+        <button class="side-panel-button" onclick="performAction('edit')">Edit Selected</button>
+        <button class="move-button side-panel-button" onclick="performAction('move')">Move Selected</button> <!-- New Move Button -->
         <button class="delete-button side-panel-button" onclick="performAction('delete')">Delete Selected</button>
     </div>
 
     <!-- Loading Spinner -->
     <div id="loading" class="loading-overlay" style="display: none;">
         <div class="spinner"></div>
+    </div>
+
+    <!-- Destination Selection Modal -->
+    <div id="destination-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeDestinationModal()">&times;</span>
+            <h2>Select Destination Folder</h2>
+            <div id="destination-breadcrumb" class="breadcrumb-links">
+                <a href="#" data-path="">Root</a>
+            </div>
+            <ul id="destination-folder-list" class="file-list">
+                <!-- Destination folders will be dynamically loaded here -->
+            </ul>
+            <button id="confirm-move-button" class="side-panel-button" onclick="confirmMove()">Confirm Move</button>
+        </div>
     </div>
 
 <!-- Monaco Editor Modal -->
@@ -94,7 +116,39 @@
     </div>
 </div>
 
+<!-- Add Folder Modal -->
+<div id="add-folder-modal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeAddFolderModal()">&times;</span>
+        <h2>Add New Folder</h2>
+        <input type="text" id="new-folder-name" placeholder="Enter folder name">
+        <button onclick="submitAddFolder()">Create Folder</button>
+    </div>
+</div>
+
+<!-- Add File Modal -->
+<div id="add-file-modal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeAddFileModal()">&times;</span>
+        <h2>Add New File</h2>
+        <input type="text" id="new-file-name" placeholder="Enter file name">
+        <button onclick="submitAddFile()">Create File</button>
+    </div>
+</div>
+
+<!-- Progress Tray -->
+<div id="progress-tray" class="progress-tray">
+    <button id="toggle-progress-tray" class="toggle-tray-button">
+        <i class="bi bi-chevron-up"></i> Progress
+    </button>
+    <div id="progress-list" class="progress-list">
+        <!-- Individual progress bars will be dynamically added here -->
+    </div>
+</div>
+
+
     <!-- Reference to External JavaScript File -->
     <script src="/static/scripts.js"></script>
+    <script src="/static/draganddrop.js"></script>
 </body>
 </html>

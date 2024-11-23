@@ -8,6 +8,12 @@ let currentSearch = '';
 let isGlobalSearch = false; // Toggle between current directory and global search
 let selectedItems = new Set(); // To store selected item paths
 let navigationHistory = []; // To manage back navigation
+let editor; // Monaco Editor instance
+let currentEditingFilePath = ''; // Currently editing file path
+let selectedDestinationPath = ''; // To store the selected destination path
+
+let activeUploadXHRs = {}; // Object to store active upload XHRs with unique IDs
+let activeDownloadXHRs = {}; // Object to store active download XHRs with unique IDs
 
 document.addEventListener('DOMContentLoaded', () => {
     loadDirectory('');
@@ -15,7 +21,312 @@ document.addEventListener('DOMContentLoaded', () => {
     setupSelectedItemsPanel();
     setupNavigationButtons();
     setupEditor();
+    setupProgressTray();
 });
+
+// Function to open the destination selection modal
+function openDestinationModal() {
+    selectedDestinationPath = currentPath; // Initialize with current directory
+    document.getElementById('destination-modal').style.display = 'block';
+    loadDestinationFolders(selectedDestinationPath);
+    updateDestinationBreadcrumb(selectedDestinationPath);
+}
+
+// Function to close the destination selection modal
+function closeDestinationModal() {
+    document.getElementById('destination-modal').style.display = 'none';
+    selectedDestinationPath = '';
+}
+
+// Function to load folders for destination selection
+function loadDestinationFolders(path) {
+    fetch(`/api/list?path=${encodeURIComponent(path)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+            const folderList = document.getElementById('destination-folder-list');
+            folderList.innerHTML = '';
+
+            // Add 'Root' as an option
+            if (path !== '') {
+                const rootItem = document.createElement('li');
+                rootItem.className = 'file-list-item';
+                rootItem.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    selectedDestinationPath = '';
+                    updateDestinationBreadcrumb(selectedDestinationPath);
+                    loadDestinationFolders(selectedDestinationPath);
+                });
+                const rootLink = document.createElement('a');
+                rootLink.href = '#';
+                rootLink.className = 'file-link';
+                rootLink.innerHTML = `<i class="bi bi-house-door-fill file-icon"></i> Root`;
+                rootLink.setAttribute('data-path', '');
+                rootLink.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    selectedDestinationPath = '';
+                    updateDestinationBreadcrumb(selectedDestinationPath);
+                    loadDestinationFolders(selectedDestinationPath);
+                });
+
+                rootItem.appendChild(rootLink);
+                folderList.appendChild(rootItem);
+            }
+
+            // Add directories
+            data.directories.forEach(directory => {
+                const fullPath = path ? `${path}/${directory}`.replace(/\\/g, '/') : directory;
+                const listItem = document.createElement('li');
+                listItem.className = 'file-list-item';
+                listItem.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    selectedDestinationPath = fullPath;
+                    updateDestinationBreadcrumb(selectedDestinationPath);
+                    loadDestinationFolders(selectedDestinationPath);
+
+                    // Highlight the selected folder
+                    const allItems = document.querySelectorAll('#destination-folder-list .file-list-item');
+                    allItems.forEach(item => {
+                        item.style.backgroundColor = '#2c2c2c';
+                    });
+                    listItem.style.backgroundColor = '#555'; // Highlight color
+                });
+                const link = document.createElement('a');
+                link.href = '#';
+                link.className = 'file-link';
+                link.innerHTML = `<i class="bi bi-folder-fill file-icon"></i> ${directory}`;
+                link.setAttribute('data-path', fullPath);
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    selectedDestinationPath = fullPath;
+                    updateDestinationBreadcrumb(selectedDestinationPath);
+                    loadDestinationFolders(selectedDestinationPath);
+                });
+
+                listItem.appendChild(link);
+                folderList.appendChild(listItem);
+            });
+
+            // If no directories, show a message
+            if (data.directories.length === 0) {
+                const message = document.createElement('li');
+                message.textContent = 'No subfolders available.';
+                message.style.color = '#b0b0b0';
+                folderList.appendChild(message);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading destination folders:', error);
+            alert('An error occurred while loading destination folders.');
+        });
+}
+
+// Function to update breadcrumb in destination modal
+function updateDestinationBreadcrumb(path) {
+    const breadcrumbLinks = document.getElementById('destination-breadcrumb');
+    breadcrumbLinks.innerHTML = ''; // Clear existing breadcrumb links
+
+    const parts = path.split('/').filter(part => part !== '');
+    let accumulatedPath = '';
+
+    // Add Root
+    const rootLink = document.createElement('a');
+    rootLink.href = '#';
+    rootLink.textContent = 'Root';
+    rootLink.setAttribute('data-path', '');
+    rootLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        selectedDestinationPath = '';
+        breadcrumbLinks.innerHTML = '';
+        const separator = document.createTextNode(' / ');
+        breadcrumbLinks.appendChild(rootLink);
+        breadcrumbLinks.appendChild(separator);
+        loadDestinationFolders('');
+    });
+    breadcrumbLinks.appendChild(rootLink);
+
+    // Add separators and links
+    parts.forEach((part, index) => {
+        accumulatedPath += `${part}/`;
+        const separator = document.createTextNode(' / ');
+        breadcrumbLinks.appendChild(separator);
+
+        const link = document.createElement('a');
+        link.href = '#';
+        link.textContent = part;
+        link.setAttribute('data-path', accumulatedPath.slice(0, -1)); // Remove trailing slash
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            selectedDestinationPath = accumulatedPath.slice(0, -1);
+            updateDestinationBreadcrumb(selectedDestinationPath);
+            loadDestinationFolders(selectedDestinationPath);
+        });
+        breadcrumbLinks.appendChild(link);
+    });
+}
+
+// Functions to open and close Add Folder Modal
+function openAddFolderModal() {
+    document.getElementById('add-folder-modal').style.display = 'block';
+}
+
+function closeAddFolderModal() {
+    document.getElementById('add-folder-modal').style.display = 'none';
+    document.getElementById('new-folder-name').value = '';
+}
+
+// Functions to submit Add Folder
+function submitAddFolder() {
+    const folderName = document.getElementById('new-folder-name').value.trim();
+    if (folderName === '') {
+        alert('Folder name cannot be empty.');
+        return;
+    }
+
+    showLoading(true);
+    fetch('/create_folder', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            path: currentPath,
+            folder_name: folderName
+        }),
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            alert(`Error: ${data.error}`);
+        } else {
+            alert('Folder created successfully.');
+            loadDirectory(currentPath);
+            closeAddFolderModal();
+        }
+    })
+    .catch(error => {
+        console.error('Error creating folder:', error);
+        alert('An error occurred while creating the folder.');
+    })
+    .finally(() => {
+        showLoading(false);
+    });
+}
+
+// Functions to open and close Add File Modal
+function openAddFileModal() {
+    document.getElementById('add-file-modal').style.display = 'block';
+}
+
+function closeAddFileModal() {
+    document.getElementById('add-file-modal').style.display = 'none';
+    document.getElementById('new-file-name').value = '';
+}
+
+// Functions to submit Add File
+function submitAddFile() {
+    const fileName = document.getElementById('new-file-name').value.trim();
+    if (fileName === '') {
+        alert('File name cannot be empty.');
+        return;
+    }
+
+    showLoading(true);
+    fetch('/create_file', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            path: currentPath,
+            file_name: fileName
+        }),
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            alert(`Error: ${data.error}`);
+        } else {
+            alert('File created successfully.');
+            loadDirectory(currentPath);
+            closeAddFileModal();
+        }
+    })
+    .catch(error => {
+        console.error('Error creating file:', error);
+        alert('An error occurred while creating the file.');
+    })
+    .finally(() => {
+        showLoading(false);
+    });
+}
+
+// Function to confirm and execute the move action
+function confirmMove() {
+    // Allow empty destinationPath to represent root
+    if (selectedDestinationPath === null || selectedDestinationPath === undefined) {
+        alert('Please select a destination folder.');
+        return;
+    }
+
+    // Confirm the move action
+    if (!confirm(`Are you sure you want to move ${selectedItems.size} item(s) to "${selectedDestinationPath || 'Root'}"?`)) {
+        return;
+    }
+
+    showLoading(true);
+
+    fetch('/move_items', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            source_paths: Array.from(selectedItems),
+            destination_path: selectedDestinationPath // Can be empty string for root
+        }),
+    })
+    .then(response => {
+        if (response.status === 207) { // Multi-Status
+            return response.json().then(data => {
+                if (data.moved.length > 0) {
+                    alert(`Successfully moved ${data.moved.length} item(s).`);
+                }
+                if (data.errors.length > 0) {
+                    let errorMsg = 'Some items could not be moved:\n';
+                    data.errors.forEach(err => {
+                        errorMsg += `- ${err.path}: ${err.error}\n`;
+                    });
+                    alert(errorMsg);
+                }
+                loadDirectory(currentPath); // Refresh the directory view
+                closeDestinationModal();
+                selectedItems.clear();
+                updateSelectedItemsPanel();
+            });
+        } else if (!response.ok) {
+            return response.json().then(data => { throw data; });
+        } else {
+            return response.json().then(data => {
+                alert(data.message);
+                loadDirectory(currentPath); // Refresh the directory view
+                closeDestinationModal();
+                selectedItems.clear();
+                updateSelectedItemsPanel();
+            });
+        }
+    })
+    .catch(error => {
+        console.error('Error moving items:', error);
+        alert(error.error || 'An error occurred while moving the items.');
+    })
+    .finally(() => {
+        showLoading(false);
+    });
+}
 
 // Function to setup the Selected Items Side Panel
 function setupSelectedItemsPanel() {
@@ -82,7 +393,7 @@ function closeSelectedItemsPanel() {
     });
 }
 
-// Function to perform actions (Download, Edit, Delete) on selected items
+// Existing performAction function
 function performAction(action) {
     if (selectedItems.size === 0) {
         alert('No items selected.');
@@ -96,6 +407,8 @@ function performAction(action) {
         deleteItems(paths);
     } else if (action === 'edit') {
         editSelectedItem(paths);
+    } else if (action === 'move') { // Updated Move Action
+        openDestinationModal(); // Open the destination selection modal
     }
 }
 
@@ -117,7 +430,7 @@ function editSelectedItem(paths) {
     openEditor(path);
 }
 
-// Consolidated Function to Download Items
+// Function to download selected items with progress and cancellation
 function downloadItems(paths) {
     if (paths.length === 1 && !allDirectories.includes(paths[0])) {
         // Single file download
@@ -128,105 +441,31 @@ function downloadItems(paths) {
     }
 }
 
-// Function to download a single file
+// Function to download a single file with progress and cancellation
 function downloadSingleFile(path) {
-    showLoading(true);
-    fetch('/download_selected', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ selected_paths: [path] }),
-    })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error('Failed to download the file');
+    const id = generateUniqueId();
+    addProgressBar(id, 'download', path.split('/').pop());
+
+    const xhr = new XMLHttpRequest();
+    activeDownloadXHRs[id] = xhr; // Store XHR with unique ID for cancellation
+    xhr.open('POST', '/download_selected', true);
+    xhr.responseType = 'blob';
+
+    // Set the request header to indicate JSON payload
+    xhr.setRequestHeader('Content-Type', 'application/json');
+
+    // Track download progress
+    xhr.onprogress = function(event) {
+        if (event.lengthComputable) {
+            const percentComplete = ((event.loaded / event.total) * 100).toFixed(2);
+            updateProgressBar(id, percentComplete);
         }
-        return response.blob();
-    })
-    .then(blob => {
-        const filename = path.split('/').pop();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-    })
-    .catch(error => {
-        console.error('Error downloading the file:', error);
-        alert('Failed to download the file.');
-    })
-    .finally(() => {
-        showLoading(false);
-    });
-}
+    };
 
-// Function to download multiple items as a ZIP with progress
-function downloadMultipleItems(paths) {
-    showLoading(true);
-    showProgress(true);
-    const progressBar = document.getElementById('progress-bar');
-    const progressText = document.getElementById('progress-text');
-    progressBar.style.width = '0%';
-    progressText.textContent = '0%';
-    progressBar.classList.remove('indeterminate');
-
-    fetch('/download_selected', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ selected_paths: paths }),
-    })
-    .then(response => {
-        if (!response.ok) {
-            return response.json().then(data => { throw data; });
-        }
-
-        const contentLength = response.headers.get('Content-Length');
-        if (contentLength) {
-            const total = parseInt(contentLength, 10);
-            let loaded = 0;
-
-            return new Response(
-                new ReadableStream({
-                    start(controller) {
-                        const reader = response.body.getReader();
-                        function read() {
-                            reader.read().then(({ done, value }) => {
-                                if (done) {
-                                    controller.close();
-                                    return;
-                                }
-                                loaded += value.byteLength;
-                                const percent = ((loaded / total) * 100).toFixed(2);
-                                progressBar.style.width = `${percent}%`;
-                                progressText.textContent = `${percent}%`;
-                                controller.enqueue(value);
-                                read();
-                            }).catch(error => {
-                                console.error('Error reading stream:', error);
-                                controller.error(error);
-                            });
-                        }
-                        read();
-                    }
-                })
-            );
-        } else {
-            // If Content-Length is not provided, show an indeterminate progress bar
-            progressBar.classList.add('indeterminate');
-            progressText.textContent = 'Downloading...';
-            return response.blob();
-        }
-    })
-    .then(response => {
-        if (response instanceof Blob) {
-            const disposition = response.headers ? response.headers.get('Content-Disposition') : null;
-            let filename = 'download.zip';
+    xhr.onload = function() {
+        if (xhr.status === 200 || xhr.status === 207) { // 207 for multi-status responses
+            const disposition = xhr.getResponseHeader('Content-Disposition');
+            let filename = 'downloaded_file';
             if (disposition && disposition.indexOf('filename=') !== -1) {
                 const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
                 const matches = filenameRegex.exec(disposition);
@@ -234,7 +473,8 @@ function downloadMultipleItems(paths) {
                     filename = matches[1].replace(/['"]/g, '');
                 }
             }
-            const url = window.URL.createObjectURL(response);
+            const blob = xhr.response;
+            const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = filename;
@@ -243,20 +483,107 @@ function downloadMultipleItems(paths) {
             a.remove();
             window.URL.revokeObjectURL(url);
             alert('Download completed successfully.');
+            loadDirectory(currentPath); // Refresh the directory view
+        } else {
+            try {
+                const response = JSON.parse(xhr.responseText);
+                alert(response.error || 'An error occurred during download.');
+            } catch (e) {
+                alert('An error occurred during download.');
+            }
         }
-    })
-    .catch(error => {
-        console.error('Error downloading selected items:', error);
-        alert(error.error || 'An error occurred while downloading the selected items.');
-    })
-    .finally(() => {
-        showLoading(false);
-        showProgress(false);
-        // Remove indeterminate class if present
-        const progressBar = document.getElementById('progress-bar');
-        progressBar.classList.remove('indeterminate');
-    });
+        removeProgressBar(id);
+        delete activeDownloadXHRs[id];
+    };
+
+    xhr.onerror = function() {
+        alert('An error occurred during the download.');
+        removeProgressBar(id);
+        delete activeDownloadXHRs[id];
+    };
+
+    xhr.onabort = function() {
+        alert('Download has been canceled.');
+        removeProgressBar(id);
+        delete activeDownloadXHRs[id];
+    };
+
+    // Send the selected_paths as JSON in the body
+    xhr.send(JSON.stringify({ selected_paths: [path] }));
 }
+
+
+// Function to download multiple items as a ZIP with progress and cancellation
+function downloadMultipleItems(paths) {
+    const id = generateUniqueId();
+    addProgressBar(id, 'download', 'Selected Items');
+
+    const xhr = new XMLHttpRequest();
+    activeDownloadXHRs[id] = xhr; // Store XHR with unique ID for cancellation
+    xhr.open('POST', '/download_selected', true);
+    xhr.responseType = 'blob';
+
+    // Set the request header to indicate JSON payload
+    xhr.setRequestHeader('Content-Type', 'application/json');
+
+    // Track download progress
+    xhr.onprogress = function(event) {
+        if (event.lengthComputable) {
+            const percentComplete = ((event.loaded / event.total) * 100).toFixed(2);
+            updateProgressBar(id, percentComplete);
+        }
+    };
+
+    xhr.onload = function() {
+        if (xhr.status === 200 || xhr.status === 207) { // 207 for multi-status responses
+            const disposition = xhr.getResponseHeader('Content-Disposition');
+            let filename = 'download.zip';
+            if (disposition && disposition.indexOf('filename=') !== -1) {
+                const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+                const matches = filenameRegex.exec(disposition);
+                if (matches != null && matches[1]) { 
+                    filename = matches[1].replace(/['"]/g, '');
+                }
+            }
+            const blob = xhr.response;
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            alert('Download completed successfully.');
+            loadDirectory(currentPath); // Refresh the directory view
+        } else {
+            try {
+                const response = JSON.parse(xhr.responseText);
+                alert(response.error || 'An error occurred during download.');
+            } catch (e) {
+                alert('An error occurred during download.');
+            }
+        }
+        removeProgressBar(id);
+        delete activeDownloadXHRs[id];
+    };
+
+    xhr.onerror = function() {
+        alert('An error occurred during the download.');
+        removeProgressBar(id);
+        delete activeDownloadXHRs[id];
+    };
+
+    xhr.onabort = function() {
+        alert('Download has been canceled.');
+        removeProgressBar(id);
+        delete activeDownloadXHRs[id];
+    };
+
+    // Send the selected_paths as JSON in the body
+    xhr.send(JSON.stringify({ selected_paths: paths }));
+}
+
 
 // Function to delete items
 function deleteItems(paths) {
@@ -365,6 +692,83 @@ function loadSidebar() {
         .catch(error => {
             console.error('Error loading sidebar:', error);
         });
+}
+
+// Function to setup the Progress Tray
+function setupProgressTray() {
+    const toggleButton = document.getElementById('toggle-progress-tray');
+    const progressList = document.getElementById('progress-list');
+
+    toggleButton.addEventListener('click', () => {
+        if (progressList.style.display === 'none' || progressList.style.display === '') {
+            progressList.style.display = 'block';
+            toggleButton.innerHTML = '<i class="bi bi-chevron-down"></i> Progress';
+        } else {
+            progressList.style.display = 'none';
+            toggleButton.innerHTML = '<i class="bi bi-chevron-up"></i> Progress';
+        }
+    });
+}
+
+// Function to add a new progress bar
+function addProgressBar(id, type, name) {
+    const progressTray = document.getElementById('progress-tray');
+    const progressList = document.getElementById('progress-list');
+
+    // Always show the progress-tray when adding a new progress bar
+    progressTray.style.display = 'block';
+    progressList.style.display = 'block'; // Ensure the list is visible
+    document.getElementById('toggle-progress-tray').innerHTML = '<i class="bi bi-chevron-down"></i> Progress';
+
+    const progressItem = document.createElement('div');
+    progressItem.className = 'progress-item';
+    progressItem.id = `progress-${id}`;
+
+    const label = document.createElement('span');
+    label.className = 'progress-label';
+    label.textContent = `${type.toUpperCase()}: ${name}`;
+
+    const progressContainer = document.createElement('div');
+    progressContainer.className = 'progress-container';
+
+    const progressBar = document.createElement('div');
+    progressBar.className = 'progress-bar';
+    progressBar.id = `progress-bar-${id}`;
+
+    const progressText = document.createElement('span');
+    progressText.className = 'progress-text';
+    progressText.id = `progress-text-${id}`;
+    progressText.textContent = '0%';
+
+    progressContainer.appendChild(progressBar);
+    progressContainer.appendChild(progressText);
+
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'cancel-button';
+    cancelButton.textContent = 'Cancel';
+    cancelButton.onclick = () => cancelOperation(id, type);
+
+    progressItem.appendChild(label);
+    progressItem.appendChild(progressContainer);
+    progressItem.appendChild(cancelButton);
+
+    progressList.appendChild(progressItem);
+}
+
+
+// Function to remove a progress bar
+function removeProgressBar(id) {
+    const progressItem = document.getElementById(`progress-${id}`);
+    if (progressItem) {
+        progressItem.remove();
+    }
+
+    // If no more progress-items, hide the progress-tray
+    const progressList = document.getElementById('progress-list');
+    if (progressList.children.length === 0) {
+        const progressTray = document.getElementById('progress-tray');
+        progressTray.style.display = 'none';
+    }
 }
 
 // Function to update breadcrumb navigation
@@ -703,131 +1107,176 @@ function sortFiles() {
     applyFilters();
 }
 
-// Function to download all files as a ZIP with progress
+// Updated Function to download all files as a ZIP with progress (New Implementation)
 function downloadAll() {
-    showLoading(true);
-    showProgress(true);
-    const progressBar = document.getElementById('progress-bar');
-    const progressText = document.getElementById('progress-text');
-    progressBar.style.width = '0%';
-    progressText.textContent = '0%';
-    progressBar.classList.remove('indeterminate');
+    const id = generateUniqueId();
+    addProgressBar(id, 'download', 'All Files');
 
-    fetch('/download_all')
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(data => { throw data; });
-            }
+    const xhr = new XMLHttpRequest();
+    activeDownloadXHRs[id] = xhr; // Store XHR with unique ID for cancellation
+    xhr.open('GET', '/download_all', true);
+    xhr.responseType = 'blob';
 
-            const contentLength = response.headers.get('Content-Length');
-            if (contentLength) {
-                const total = parseInt(contentLength, 10);
-                let loaded = 0;
+    // Track download progress
+    xhr.onprogress = function(event) {
+        if (event.lengthComputable) {
+            const percentComplete = ((event.loaded / event.total) * 100).toFixed(2);
+            updateProgressBar(id, percentComplete);
+        }
+    };
 
-                return new Response(
-                    new ReadableStream({
-                        start(controller) {
-                            const reader = response.body.getReader();
-                            function read() {
-                                reader.read().then(({ done, value }) => {
-                                    if (done) {
-                                        controller.close();
-                                        return;
-                                    }
-                                    loaded += value.byteLength;
-                                    const percent = ((loaded / total) * 100).toFixed(2);
-                                    progressBar.style.width = `${percent}%`;
-                                    progressText.textContent = `${percent}%`;
-                                    controller.enqueue(value);
-                                    read();
-                                }).catch(error => {
-                                    console.error('Error reading stream:', error);
-                                    controller.error(error);
-                                });
-                            }
-                            read();
-                        }
-                    })
-                );
-            } else {
-                // If Content-Length is not provided, show an indeterminate progress bar
-                progressBar.classList.add('indeterminate');
-                progressText.textContent = 'Downloading...';
-                return response.blob();
-            }
-        })
-        .then(response => {
-            if (response instanceof Blob) {
-                const disposition = response.headers ? response.headers.get('Content-Disposition') : null;
-                let filename = 'download.zip';
-                if (disposition && disposition.indexOf('filename=') !== -1) {
-                    const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
-                    const matches = filenameRegex.exec(disposition);
-                    if (matches != null && matches[1]) { 
-                        filename = matches[1].replace(/['"]/g, '');
-                    }
+    xhr.onload = function() {
+        if (xhr.status === 200) {
+            const disposition = xhr.getResponseHeader('Content-Disposition');
+            let filename = 'download.zip';
+            if (disposition && disposition.indexOf('filename=') !== -1) {
+                const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+                const matches = filenameRegex.exec(disposition);
+                if (matches != null && matches[1]) { 
+                    filename = matches[1].replace(/['"]/g, '');
                 }
-                const url = window.URL.createObjectURL(response);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                window.URL.revokeObjectURL(url);
-                alert('Download completed successfully.');
             }
-        })
-        .catch(error => {
-            console.error('Error downloading all items:', error);
-            alert(error.error || 'An error occurred while downloading all items.');
-        })
-        .finally(() => {
-            showLoading(false);
-            showProgress(false);
-            // Remove indeterminate class if present
-            const progressBar = document.getElementById('progress-bar');
-            progressBar.classList.remove('indeterminate');
-        });
+            const blob = xhr.response;
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            alert('Download completed successfully.');
+        } else {
+            try {
+                const response = JSON.parse(xhr.responseText);
+                alert(response.error || 'An error occurred during download.');
+            } catch (e) {
+                alert('An error occurred during download.');
+            }
+        }
+        removeProgressBar(id);
+        delete activeDownloadXHRs[id];
+    };
+
+    xhr.onerror = function() {
+        alert('An error occurred during the download.');
+        removeProgressBar(id);
+        delete activeDownloadXHRs[id];
+    };
+
+    xhr.onabort = function() {
+        alert('Download has been canceled.');
+        removeProgressBar(id);
+        delete activeDownloadXHRs[id];
+    };
+
+    xhr.send();
 }
 
-// Function to upload files
+// Function to cancel ongoing upload or download
+function cancelOperation(id, type) {
+    if (type === 'upload' && activeUploadXHRs[id]) {
+        activeUploadXHRs[id].abort();
+        delete activeUploadXHRs[id];
+        alert('Upload canceled.');
+    }
+    if (type === 'download' && activeDownloadXHRs[id]) {
+        activeDownloadXHRs[id].abort();
+        delete activeDownloadXHRs[id];
+        alert('Download canceled.');
+    }
+    removeProgressBar(id);
+}
+
+function resetAllProgressBars() {
+    const progressList = document.getElementById('progress-list');
+    progressList.innerHTML = '';
+    activeUploadXHRs = {};
+    activeDownloadXHRs = {};
+}
+
+function updateProgressBar(id, percentComplete) {
+    const progressBar = document.getElementById(`progress-bar-${id}`);
+    const progressText = document.getElementById(`progress-text-${id}`);
+    if (progressBar && progressText) {
+        progressBar.style.width = `${percentComplete}%`;
+        progressText.textContent = `${percentComplete}%`;
+    }
+}
+
+// Function to upload files with progress tracking and cancellation
 function uploadFiles() {
     const input = document.getElementById('upload-input');
     const files = input.files;
     if (files.length === 0) {
+        alert('Please select at least one file to upload.');
         return;
     }
 
-    const formData = new FormData();
     for (let i = 0; i < files.length; i++) {
-        formData.append('files', files[i]);
-    }
-    formData.append('path', currentPath);
+        const file = files[i];
+        const id = generateUniqueId();
+        addProgressBar(id, 'upload', file.name);
 
-    showLoading(true);
-    fetch('/upload', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.error) {
-            alert(data.error);
-        } else {
-            alert('Files uploaded successfully.');
-            loadDirectory(currentPath); // Refresh the directory view
-        }
-        showLoading(false);
-    })
-    .catch(error => {
-        console.error('Error uploading files:', error);
-        alert('An error occurred while uploading files.');
-        showLoading(false);
-    });
+        const formData = new FormData();
+        formData.append('files', file);
+        formData.append('path', currentPath);
+
+        const xhr = new XMLHttpRequest();
+        activeUploadXHRs[id] = xhr; // Assign to activeUploadXHRs for cancellation
+        xhr.open('POST', '/upload', true);
+
+        // Track upload progress
+        xhr.upload.onprogress = function(event) {
+            if (event.lengthComputable) {
+                const percentComplete = ((event.loaded / event.total) * 100).toFixed(2);
+                updateProgressBar(id, percentComplete);
+            }
+        };
+
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                const response = JSON.parse(xhr.responseText);
+                if (response.error) {
+                    alert(`Error uploading ${file.name}: ${response.error}`);
+                } else {
+                    alert(`File "${file.name}" uploaded successfully.`);
+                    loadDirectory(currentPath);
+                }
+            } else {
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    alert(`Error uploading ${file.name}: ${response.error}`);
+                } catch (e) {
+                    alert(`An error occurred during the upload of "${file.name}".`);
+                }
+            }
+            removeProgressBar(id);
+            delete activeUploadXHRs[id];
+        };
+
+        xhr.onerror = function() {
+            alert(`An error occurred during the upload of "${file.name}".`);
+            removeProgressBar(id);
+            delete activeUploadXHRs[id];
+        };
+
+        xhr.onabort = function() {
+            alert(`Upload of "${file.name}" has been canceled.`);
+            removeProgressBar(id);
+            delete activeUploadXHRs[id];
+        };
+
+        xhr.send(formData);
+    }
 
     // Reset the input
     input.value = '';
+}
+
+// Function to generate a unique ID for each progress task
+function generateUniqueId() {
+    return 'xxxxxx'.replace(/x/g, () => Math.floor(Math.random() * 16).toString(16));
 }
 
 // Function to show or hide the loading spinner
@@ -840,15 +1289,6 @@ function showLoading(show) {
     }
 }
 
-// Function to show or hide the progress bar
-function showProgress(show) {
-    const progressContainer = document.getElementById('progress-container');
-    if (show) {
-        progressContainer.style.display = 'block';
-    } else {
-        progressContainer.style.display = 'none';
-    }
-}
 
 // Function to setup navigation buttons (Back and Home)
 function setupNavigationButtons() {
@@ -869,5 +1309,90 @@ function setupNavigationButtons() {
             navigationHistory.push(currentPath); // Push current path to history before navigating
             loadDirectory('');
         }
+    });
+}
+
+// Function to add a new folder
+function addFolder() {
+    const folderName = prompt('Enter the name of the new folder:');
+    if (folderName === null) { // User canceled the prompt
+        return;
+    }
+    const trimmedName = folderName.trim();
+    if (trimmedName === '') {
+        alert('Folder name cannot be empty.');
+        return;
+    }
+
+    showLoading(true);
+    fetch('/create_folder', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            path: currentPath,
+            folder_name: trimmedName
+        }),
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            alert(`Error: ${data.error}`);
+        } else {
+            alert('Folder created successfully.');
+            loadDirectory(currentPath);
+        }
+    })
+    .catch(error => {
+        console.error('Error creating folder:', error);
+        alert('An error occurred while creating the folder.');
+    })
+    .finally(() => {
+        showLoading(false);
+    });
+}
+
+// Function to add a new file
+function addFile() {
+    const fileName = prompt('Enter the name of the new file (e.g., example.txt):');
+    if (fileName === null) { // User canceled the prompt
+        return;
+    }
+    const trimmedName = fileName.trim();
+    if (trimmedName === '') {
+        alert('File name cannot be empty.');
+        return;
+    }
+
+    // Optional: validate file extension
+    // For simplicity, accept any extension
+
+    showLoading(true);
+    fetch('/create_file', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            path: currentPath,
+            file_name: trimmedName
+        }),
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            alert(`Error: ${data.error}`);
+        } else {
+            alert('File created successfully.');
+            loadDirectory(currentPath);
+        }
+    })
+    .catch(error => {
+        console.error('Error creating file:', error);
+        alert('An error occurred while creating the file.');
+    })
+    .finally(() => {
+        showLoading(false);
     });
 }

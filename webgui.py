@@ -23,8 +23,20 @@ VOLUME = os.getenv("VOLUME")
 USERNAME = os.getenv("USERNAME")
 
 # Configure upload parameters
-UPLOAD_EXTENSIONS = set(['.txt', '.pdf', '.png', '.jpg', '.jpeg', '.gif', '.docx', '.xlsx', '.pptx', '.zip', '.bat', '.md', '.py', '.js', '.css', '.html', '.yaml', '.yml'])  # Define allowed extensions
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB limit per file
+UPLOAD_EXTENSIONS = set([
+    '.txt', '.pdf', '.png', '.jpg', '.jpeg', '.gif', '.docx', '.xlsx', '.pptx',
+    '.zip', '.bat', '.md', '.py', '.js', '.css', '.html', '.yaml', '.yml',
+    '.exe', '.msi', '.csv', '.json', '.xml', '.log', '.ini', '.sh', '.php', '.rb',
+    '.java', '.c', '.cpp', '.h', '.asm', '.doc', '.xls', '.ppt', '.rtf', '.odt',
+    '.ods', '.odp', '.epub', '.mobi', '.bmp', '.svg', '.tiff', '.tif', '.webp',
+    '.ico', '.raw', '.mp3', '.wav', '.flac', '.aac', '.ogg', '.oga', '.m4a',
+    '.wma', '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.webm', '.flv', '.7z', '.rar',
+    '.tar', '.gz', '.bz2', '.xz', '.iso', '.dll', '.sys', '.apk', '.deb', '.rpm',
+    '.app', '.jar', '.ps1', '.psd', '.ai', '.xd', '.sketch', '.dwg', '.dxf',
+    '.torrent', '.key', '.pem', '.crt', '.pfx', '.vcard', '.vcf'
+])
+
+app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024 * 1024  # 5 GB limit per file
 
 def secure_path(path):
     """
@@ -188,22 +200,22 @@ def delete_item():
 
         for path in paths:
             logger.info(f"Attempting to delete: {path}")
-            target_path = secure_path(path)
+            destination_path = secure_path(path)
 
-            if not os.path.exists(target_path):
-                logger.error(f"Item does not exist: {target_path}")
+            if not os.path.exists(destination_path):
+                logger.error(f"Item does not exist: {destination_path}")
                 errors.append({'path': path, 'error': 'Item does not exist.'})
                 continue
 
             try:
-                if os.path.isfile(target_path):
-                    os.remove(target_path)
-                    logger.info(f"Deleted file: {target_path}")
-                elif os.path.isdir(target_path):
-                    shutil.rmtree(target_path)  # Removes directory and all its contents
-                    logger.info(f"Deleted directory and its contents: {target_path}")
+                if os.path.isfile(destination_path):
+                    os.remove(destination_path)
+                    logger.info(f"Deleted file: {destination_path}")
+                elif os.path.isdir(destination_path):
+                    shutil.rmtree(destination_path)  # Removes directory and all its contents
+                    logger.info(f"Deleted directory and its contents: {destination_path}")
                 else:
-                    logger.error(f"Selected path is neither a file nor a directory: {target_path}")
+                    logger.error(f"Selected path is neither a file nor a directory: {destination_path}")
                     errors.append({'path': path, 'error': 'Neither file nor directory.'})
                     continue
                 deleted.append(path)
@@ -250,19 +262,21 @@ def download_all():
         zip_buffer.seek(0)
 
         # Serve the zip file as a downloadable response with a custom name
-        zip_filename = f"notionbackup-{USERNAME}-all.zip"
+        zip_filename = f"{USERNAME}-all.zip"
         logger.info(f"Serving ZIP file: {zip_filename}")
         return Response(
             zip_buffer,
             mimetype='application/zip',
             headers={
-                'Content-Disposition': f'attachment; filename={zip_filename}'
+                'Content-Disposition': f'attachment; filename={zip_filename}',
+                'Content-Length': str(zip_buffer.getbuffer().nbytes)  # Set Content-Length
             }
         )
 
     except Exception as e:
         logger.exception(f"Error creating ZIP: {e}")
         return jsonify({'error': f"An error occurred while creating ZIP: {str(e)}"}), 500
+
 
 @app.route('/download_selected', methods=['POST'])
 def download_selected():
@@ -299,18 +313,18 @@ def download_selected():
                     for root, dirs, files in os.walk(selected_path):
                         for file in files:
                             file_path = os.path.join(root, file)
-                            # Preserve the directory structure in the zip
                             relative_file_path = os.path.relpath(file_path, VOLUME).replace("\\", "/")
                             zip_file.write(file_path, relative_file_path)
                             logger.debug(f"Added to ZIP: {relative_file_path}")
                 zip_buffer.seek(0)
-                zip_filename = f"notionbackup-{USERNAME}-{os.path.basename(selected_path)}.zip"
+                zip_filename = f"{USERNAME}-{os.path.basename(selected_path)}.zip"
                 logger.info(f"Serving ZIP file: {zip_filename}")
                 return Response(
                     zip_buffer,
                     mimetype='application/zip',
                     headers={
-                        'Content-Disposition': f'attachment; filename={zip_filename}'
+                        'Content-Disposition': f'attachment; filename={zip_filename}',
+                        'Content-Length': str(zip_buffer.getbuffer().nbytes)  # Set Content-Length
                     }
                 )
             else:
@@ -339,19 +353,22 @@ def download_selected():
         zip_buffer.seek(0)
 
         # Serve the zip file as a downloadable response with a custom name
-        zip_filename = f"notionbackup-{USERNAME}-selected.zip"
+        zip_filename = f"{USERNAME}-selected.zip"
         logger.info(f"Serving ZIP file: {zip_filename}")
         return Response(
             zip_buffer,
             mimetype='application/zip',
             headers={
-                'Content-Disposition': f'attachment; filename={zip_filename}'
+                'Content-Disposition': f'attachment; filename={zip_filename}',
+                'Content-Length': str(zip_buffer.getbuffer().nbytes)  # Set Content-Length
             }
         )
 
     except Exception as e:
         logger.exception(f"Error creating ZIP for selected items: {e}")
         return jsonify({'error': f"An error occurred while creating ZIP: {str(e)}"}), 500
+
+
 
 @app.route('/api/get_file_content', methods=['GET'])
 def get_file_content():
@@ -398,6 +415,123 @@ def save_file_content():
 
     except Exception as e:
         logger.exception(f"Error saving file content for {path}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# New Route: Create Folder
+@app.route('/create_folder', methods=['POST'])
+def create_folder():
+    try:
+        data = request.get_json()
+        path = data.get('path', '')
+        folder_name = data.get('folder_name', '').strip()
+
+        if not folder_name:
+            return jsonify({'error': 'Folder name cannot be empty.'}), 400
+
+        # Secure the target directory
+        target_dir = secure_path(path)
+
+        # Full path for the new folder
+        new_folder_path = os.path.join(target_dir, secure_filename(folder_name))
+
+        if os.path.exists(new_folder_path):
+            return jsonify({'error': 'Folder already exists.'}), 400
+
+        os.makedirs(new_folder_path)
+        logger.info(f"Created new folder: {new_folder_path}")
+
+        return jsonify({'message': 'Folder created successfully.'}), 200
+
+    except Exception as e:
+        logger.exception(f"Error creating folder in {path}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# New Route: Create File
+@app.route('/create_file', methods=['POST'])
+def create_file():
+    try:
+        data = request.get_json()
+        path = data.get('path', '')
+        file_name = data.get('file_name', '').strip()
+
+        if not file_name:
+            return jsonify({'error': 'File name cannot be empty.'}), 400
+
+        # Secure the target directory
+        target_dir = secure_path(path)
+
+        # Full path for the new file
+        new_file_path = os.path.join(target_dir, secure_filename(file_name))
+
+        if os.path.exists(new_file_path):
+            return jsonify({'error': 'File already exists.'}), 400
+
+        # Create an empty file
+        with open(new_file_path, 'w') as f:
+            pass
+
+        logger.info(f"Created new file: {new_file_path}")
+
+        return jsonify({'message': 'File created successfully.'}), 200
+
+    except Exception as e:
+        logger.exception(f"Error creating file in {path}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# New Route: Move Items
+@app.route('/move_items', methods=['POST'])
+def move_items():
+    try:
+        data = request.get_json()
+        logger.debug(f"Received move_items data: {data}")
+        source_paths = data.get('source_paths', [])
+        destination_path = data.get('destination_path', '')
+        logger.debug(f"Source paths: {source_paths}, Destination path: {destination_path}")
+
+        if not source_paths:
+            return jsonify({'error': 'No source paths provided.'}), 400
+
+        # Secure the target directory; empty string represents root
+        secure_destination_path = secure_path(destination_path)
+
+        # Ensure the target directory exists
+        if not os.path.exists(secure_destination_path):
+            return jsonify({'error': 'Target directory does not exist.'}), 400
+
+        # Process each source path
+        moved = []
+        errors = []
+
+        for source_path in source_paths:
+            secure_source_path = secure_path(source_path)
+            item_name = os.path.basename(secure_source_path)
+            destination = os.path.join(secure_destination_path, item_name)
+
+            # Prevent moving an item into itself or its subdirectories
+            if os.path.abspath(destination).startswith(os.path.abspath(secure_source_path)):
+                errors.append({'path': source_path, 'error': 'Cannot move a directory into itself or its subdirectory.'})
+                continue
+
+            # Check if destination already exists
+            if os.path.exists(destination):
+                errors.append({'path': source_path, 'error': 'Destination already exists.'})
+                continue
+
+            try:
+                shutil.move(secure_source_path, destination)
+                logger.info(f"Moved {secure_source_path} to {destination}")
+                moved.append(source_path)
+            except Exception as e:
+                logger.exception(f"Error moving {source_path} to {destination}: {e}")
+                errors.append({'path': source_path, 'error': str(e)})
+
+        if errors:
+            return jsonify({'message': 'Some items were not moved.', 'moved': moved, 'errors': errors}), 207  # Multi-Status
+        else:
+            return jsonify({'message': 'All items moved successfully.', 'moved': moved}), 200
+
+    except Exception as e:
+        logger.exception(f"Error moving items: {e}")
         return jsonify({'error': str(e)}), 500
 
 # Route to serve static files

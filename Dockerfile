@@ -4,19 +4,21 @@ WORKDIR /app
 
 # Copy requirements.txt first for better caching
 COPY requirements.txt .
+RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy the script and other necessary files
-COPY webgui.py .
-COPY .env .
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-# Copy the application code
-COPY webgui.py /app
-COPY templates /app/templates
-COPY static /app/static
+# Copy project
+COPY . .
 
-CMD ["python", "webgui.py"]
+# Install Gunicorn
+RUN pip install gunicorn
+
+# Expose port
+EXPOSE 5000
+
+# Command to run Gunicorn with multiple workers
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "9", "--timeout", "300", "webgui:app"]
