@@ -380,6 +380,14 @@ function updateSelectedItemsPanel() {
     } else {
         sidePanel.style.display = 'none';
     }
+
+    // Update "Select All" checkbox state
+    const selectAllCheckbox = document.getElementById('select-all-checkbox');
+    if (selectAllCheckbox) {
+        const totalItems = document.querySelectorAll('.file-checkbox').length;
+        const checkedItems = document.querySelectorAll('.file-checkbox:checked').length;
+        selectAllCheckbox.checked = totalItems > 0 && checkedItems === totalItems;
+    }
 }
 
 // Function to close the Selected Items Side Panel
@@ -866,6 +874,19 @@ function updateFileList(directories, files) {
     const fileList = document.getElementById('file-list');
     fileList.innerHTML = ''; // Clear existing list
 
+    // Add "Select All" checkbox
+    const selectAllItem = document.createElement('li');
+    selectAllItem.className = 'file-list-item select-all-item';
+
+    const selectAllCheckbox = document.createElement('input');
+    selectAllCheckbox.type = 'checkbox';
+    selectAllCheckbox.id = 'select-all-checkbox';
+    selectAllCheckbox.className = 'select-all-checkbox';
+    selectAllCheckbox.addEventListener('change', toggleSelectAll);
+
+    selectAllItem.appendChild(selectAllCheckbox);
+    fileList.appendChild(selectAllItem);
+
     // Add directories
     directories.forEach(directory => {
         const listItem = document.createElement('li');
@@ -934,6 +955,23 @@ function updateFileList(directories, files) {
         fileList.appendChild(listItem);
     });
 }
+
+// Function to toggle all checkboxes
+function toggleSelectAll(event) {
+    const isChecked = event.target.checked;
+    const checkboxes = document.querySelectorAll('.file-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = isChecked;
+        const path = checkbox.value;
+        if (isChecked) {
+            selectedItems.add(path);
+        } else {
+            selectedItems.delete(path);
+        }
+    });
+    updateSelectedItemsPanel();
+}
+
 
 // Function to setup Monaco Editor
 function setupEditor() {
@@ -1206,7 +1244,7 @@ function updateProgressBar(id, percentComplete) {
 
 // Function to upload files with progress tracking and cancellation
 function uploadFiles() {
-    const input = document.getElementById('upload-input');
+    const input = document.getElementById('upload-file-input');
     const files = input.files;
     if (files.length === 0) {
         alert('Please select at least one file to upload.');
@@ -1269,6 +1307,78 @@ function uploadFiles() {
 
         xhr.send(formData);
     }
+
+    // Reset the input
+    input.value = '';
+}
+
+// Function to upload folders with directory structure, progress tracking, and cancellation
+function uploadFolders() {
+    const input = document.getElementById('upload-folder-input');
+    const files = input.files;
+    if (files.length === 0) {
+        alert('Please select at least one folder to upload.');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('path', currentPath); // Current directory
+
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        // Append each file with its relative path
+        formData.append('files', file, file.webkitRelativePath);
+    }
+
+    const id = generateUniqueId();
+    addProgressBar(id, 'upload', 'Folder Upload');
+
+    const xhr = new XMLHttpRequest();
+    activeUploadXHRs[id] = xhr; // Assign to activeUploadXHRs for cancellation
+    xhr.open('POST', '/upload', true);
+
+    // Track upload progress
+    xhr.upload.onprogress = function(event) {
+        if (event.lengthComputable) {
+            const percentComplete = ((event.loaded / event.total) * 100).toFixed(2);
+            updateProgressBar(id, percentComplete);
+        }
+    };
+
+    xhr.onload = function() {
+        if (xhr.status === 200) {
+            const response = JSON.parse(xhr.responseText);
+            if (response.error) {
+                alert(`Error uploading: ${response.error}`);
+            } else {
+                alert('Folder uploaded successfully.');
+                loadDirectory(currentPath);
+            }
+        } else {
+            try {
+                const response = JSON.parse(xhr.responseText);
+                alert(`Error uploading: ${response.error}`);
+            } catch (e) {
+                alert('An error occurred during the upload.');
+            }
+        }
+        removeProgressBar(id);
+        delete activeUploadXHRs[id];
+    };
+
+    xhr.onerror = function() {
+        alert('An error occurred during the upload.');
+        removeProgressBar(id);
+        delete activeUploadXHRs[id];
+    };
+
+    xhr.onabort = function() {
+        alert('Upload has been canceled.');
+        removeProgressBar(id);
+        delete activeUploadXHRs[id];
+    };
+
+    xhr.send(formData);
 
     // Reset the input
     input.value = '';

@@ -865,6 +865,63 @@ body {
     padding-bottom: 60px; /* Adjust based on progress bar height */
 }
 
+/* styles.css */
+
+/* Style for the Select All list item */
+.select-all-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    background-color: #3a3a3a;
+    border-bottom: 1px solid #555;
+}
+
+/* Style for the Select All checkbox */
+.select-all-checkbox {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+/* Remove any label or additional text styling since there's no text */
+
+/* Optional: Adjust file list item spacing */
+.file-list-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    border-bottom: 1px solid #444;
+}
+
+/* Style individual file checkboxes */
+.file-checkbox {
+    margin-right: 12px;
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+/* Style file links */
+.file-link {
+    flex-grow: 1;
+    color: #ffffff;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+/* Style file details */
+.file-details {
+    color: #b0b0b0;
+    font-size: 0.9em;
+    margin-left: 12px;
+}
+
+/* Ensure the Select All checkbox doesn't stretch */
+.select-all-item .select-all-checkbox {
+    flex-shrink: 0;
+}
+
+
 /* Progress Tray Styling */
 .progress-tray {
     display: none; /* Hide by default */

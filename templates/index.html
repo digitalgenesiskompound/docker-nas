@@ -37,31 +37,37 @@
             </div>
         </div>
         
-        <!-- Action Buttons, Upload, Search Bar, and Sort Dropdown -->
-        <div class="action-group">
-            <div class="button-group">
-                <button id="download-all-button" class="download-button" onclick="downloadAll()">Download All as ZIP</button>
-                <button id="upload-button" class="upload-button" onclick="document.getElementById('upload-input').click()">Upload</button>
-                <!-- Updated "Add Folder" Button -->
-                <button id="add-folder-button" class="add-folder-button" onclick="openAddFolderModal()">Add Folder</button>
-                <!-- Updated "Add File" Button -->
-                <button id="add-file-button" class="add-file-button" onclick="openAddFileModal()">Add File</button>
-                <!-- "Move Selected" Button remains commented out -->
-                <!-- <button id="move-selected-button" class="move-button" onclick="openMoveModal()">Move Selected</button> -->
-                <input type="file" id="upload-input" style="display: none;" multiple onchange="uploadFiles()">
-            </div>
-            <div class="search-sort-group">
-                <input type="text" id="search-bar" placeholder="Search files and folders..." oninput="searchFiles()">
-                <select id="sort-dropdown" onchange="sortFiles()">
-                    <option value="name_asc">Name (A-Z)</option>
-                    <option value="name_desc">Name (Z-A)</option>
-                    <option value="date_asc">Date Modified (Oldest)</option>
-                    <option value="date_desc">Date Modified (Newest)</option>
-                    <option value="size_asc">Size (Smallest)</option>
-                    <option value="size_desc">Size (Largest)</option>
-                </select>
-            </div>
+    <!-- Action Buttons, Upload, Search Bar, and Sort Dropdown -->
+    <div class="action-group">
+        <div class="button-group">
+            <button id="download-all-button" class="download-button" onclick="downloadAll()">Download All as ZIP</button>
+            
+            <!-- Upload File Button -->
+            <button id="upload-file-button" class="upload-button" onclick="document.getElementById('upload-file-input').click()">Upload File</button>
+            <input type="file" id="upload-file-input" style="display: none;" multiple onchange="uploadFiles()">
+            
+            <!-- Upload Folder Button -->
+            <button id="upload-folder-button" class="upload-button" onclick="document.getElementById('upload-folder-input').click()">Upload Folder</button>
+            <input type="file" id="upload-folder-input" style="display: none;" webkitdirectory multiple onchange="uploadFolders()">
+            
+            <!-- Existing Add Folder and Add File Buttons -->
+            <button id="add-folder-button" class="add-folder-button" onclick="openAddFolderModal()">Add Folder</button>
+            <button id="add-file-button" class="add-file-button" onclick="openAddFileModal()">Add File</button>
+            <!-- <button id="move-selected-button" class="move-button" onclick="openMoveModal()">Move Selected</button> -->
         </div>
+        <div class="search-sort-group">
+            <input type="text" id="search-bar" placeholder="Search files and folders..." oninput="searchFiles()">
+            <select id="sort-dropdown" onchange="sortFiles()">
+                <option value="name_asc">Name (A-Z)</option>
+                <option value="name_desc">Name (Z-A)</option>
+                <option value="date_asc">Date Modified (Oldest)</option>
+                <option value="date_desc">Date Modified (Newest)</option>
+                <option value="size_asc">Size (Smallest)</option>
+                <option value="size_desc">Size (Largest)</option>
+            </select>
+        </div>
+    </div>
+
         
         <!-- Directory and File Listing -->
         <form id="file-list-form">

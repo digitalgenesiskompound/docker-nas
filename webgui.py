@@ -7,6 +7,7 @@ import io
 from werkzeug.utils import secure_filename
 import shutil
 from dotenv import load_dotenv
+import pathlib
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -22,21 +23,6 @@ load_dotenv()
 VOLUME = os.getenv("VOLUME")
 USERNAME = os.getenv("USERNAME")
 
-# Configure upload parameters
-UPLOAD_EXTENSIONS = set([
-    '.txt', '.pdf', '.png', '.jpg', '.jpeg', '.gif', '.docx', '.xlsx', '.pptx',
-    '.zip', '.bat', '.md', '.py', '.js', '.css', '.html', '.yaml', '.yml',
-    '.exe', '.msi', '.csv', '.json', '.xml', '.log', '.ini', '.sh', '.php', '.rb',
-    '.java', '.c', '.cpp', '.h', '.asm', '.doc', '.xls', '.ppt', '.rtf', '.odt',
-    '.ods', '.odp', '.epub', '.mobi', '.bmp', '.svg', '.tiff', '.tif', '.webp',
-    '.ico', '.raw', '.mp3', '.wav', '.flac', '.aac', '.ogg', '.oga', '.m4a',
-    '.wma', '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.webm', '.flv', '.7z', '.rar',
-    '.tar', '.gz', '.bz2', '.xz', '.iso', '.dll', '.sys', '.apk', '.deb', '.rpm',
-    '.app', '.jar', '.ps1', '.psd', '.ai', '.xd', '.sketch', '.dwg', '.dxf',
-    '.torrent', '.key', '.pem', '.crt', '.pfx', '.vcard', '.vcf', '.env', '.example',
-    '.gitignore', '.git',
-])
-
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024 * 1024  # 5 GB limit per file
 
 def secure_path(path):
@@ -48,6 +34,12 @@ def secure_path(path):
         logger.warning(f"Attempted access to forbidden path: {path}")
         abort(403)  # Forbidden
     return abs_path
+
+def secure_relative_path(relative_path):
+    # Split the path and secure each part
+    parts = pathlib.PurePosixPath(relative_path).parts
+    safe_parts = [secure_filename(part) for part in parts]
+    return os.path.join(*safe_parts)
 
 @app.route('/')
 def index():
@@ -164,25 +156,34 @@ def upload_files():
             return jsonify({'error': 'No files uploaded.'}), 400
 
         for file in uploaded_files:
-            filename = secure_filename(file.filename)
-            if filename != '':
-                file_ext = os.path.splitext(filename)[1].lower()
-                if file_ext not in UPLOAD_EXTENSIONS:
-                    logger.error(f"File extension {file_ext} is not allowed for file {filename}.")
-                    return jsonify({'error': f'File extension {file_ext} is not allowed.'}), 400
-                file_path = os.path.join(target_dir, filename)
-                # Prevent overwriting existing files
-                if os.path.exists(file_path):
-                    logger.error(f'File "{filename}" already exists in {path}.')
-                    return jsonify({'error': f'File "{filename}" already exists.'}), 400
-                file.save(file_path)
-                logger.info(f"Uploaded file: {file_path}")
+            # Use the filename as the relative path
+            relative_path = file.filename  # Includes relative directories
+            if relative_path.startswith('/') or '..' in relative_path:
+                logger.error(f"Invalid file path: {relative_path}")
+                return jsonify({'error': 'Invalid file path.'}), 400
+
+            # Secure the relative path
+            safe_relative_path = secure_relative_path(relative_path)
+            # Split the relative path to handle directories
+            relative_dirs, filename = os.path.split(safe_relative_path)
+            final_dir = os.path.join(target_dir, relative_dirs)
+            os.makedirs(final_dir, exist_ok=True)  # Create directories as needed
+
+            file_path = os.path.join(final_dir, filename)
+            # Prevent overwriting existing files
+            if os.path.exists(file_path):
+                logger.error(f'File "{file_path}" already exists.')
+                return jsonify({'error': f'File "{file_path}" already exists.'}), 400
+
+            file.save(file_path)
+            logger.info(f"Uploaded file: {file_path}")
 
         return jsonify({'message': 'Files uploaded successfully.'}), 200
 
     except Exception as e:
         logger.exception(f"Error uploading files to {path}: {e}")
         return jsonify({'error': str(e)}), 500
+
 
 @app.route('/delete', methods=['POST'])
 def delete_item():
