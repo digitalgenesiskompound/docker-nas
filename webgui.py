@@ -33,7 +33,8 @@ UPLOAD_EXTENSIONS = set([
     '.wma', '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.webm', '.flv', '.7z', '.rar',
     '.tar', '.gz', '.bz2', '.xz', '.iso', '.dll', '.sys', '.apk', '.deb', '.rpm',
     '.app', '.jar', '.ps1', '.psd', '.ai', '.xd', '.sketch', '.dwg', '.dxf',
-    '.torrent', '.key', '.pem', '.crt', '.pfx', '.vcard', '.vcf'
+    '.torrent', '.key', '.pem', '.crt', '.pfx', '.vcard', '.vcf', '.env', '.example',
+    '.gitignore', '.git',
 ])
 
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024 * 1024  # 5 GB limit per file
