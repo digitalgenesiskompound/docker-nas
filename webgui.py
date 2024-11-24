@@ -9,8 +9,8 @@ import shutil
 from dotenv import load_dotenv
 import pathlib
 
-app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+app = Flask(__name__, static_folder='static', template_folder='templates')
+CORS(app, resources={r"/*": {"origins": "*"}})  # Adjust origins as needed for security
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -23,6 +23,7 @@ load_dotenv()
 VOLUME = os.getenv("VOLUME")
 USERNAME = os.getenv("USERNAME")
 
+# Set maximum file size for uploads (5 GB)
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024 * 1024  # 5 GB limit per file
 
 def secure_path(path):
@@ -36,7 +37,9 @@ def secure_path(path):
     return abs_path
 
 def secure_relative_path(relative_path):
-    # Split the path and secure each part
+    """
+    Secure each part of the relative path to prevent directory traversal.
+    """
     parts = pathlib.PurePosixPath(relative_path).parts
     safe_parts = [secure_filename(part) for part in parts]
     return os.path.join(*safe_parts)
@@ -184,7 +187,6 @@ def upload_files():
         logger.exception(f"Error uploading files to {path}: {e}")
         return jsonify({'error': str(e)}), 500
 
-
 @app.route('/delete', methods=['POST'])
 def delete_item():
     try:
@@ -234,7 +236,7 @@ def delete_item():
         logger.exception(f"Error deleting items: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/download_all')
+@app.route('/download_all', methods=['GET'])
 def download_all():
     try:
         if not os.path.exists(VOLUME):
@@ -278,7 +280,6 @@ def download_all():
     except Exception as e:
         logger.exception(f"Error creating ZIP: {e}")
         return jsonify({'error': f"An error occurred while creating ZIP: {str(e)}"}), 500
-
 
 @app.route('/download_selected', methods=['POST'])
 def download_selected():
@@ -370,8 +371,6 @@ def download_selected():
         logger.exception(f"Error creating ZIP for selected items: {e}")
         return jsonify({'error': f"An error occurred while creating ZIP: {str(e)}"}), 500
 
-
-
 @app.route('/api/get_file_content', methods=['GET'])
 def get_file_content():
     try:
@@ -419,7 +418,6 @@ def save_file_content():
         logger.exception(f"Error saving file content for {path}: {e}")
         return jsonify({'error': str(e)}), 500
 
-# New Route: Create Folder
 @app.route('/create_folder', methods=['POST'])
 def create_folder():
     try:
@@ -448,7 +446,6 @@ def create_folder():
         logger.exception(f"Error creating folder in {path}: {e}")
         return jsonify({'error': str(e)}), 500
 
-# New Route: Create File
 @app.route('/create_file', methods=['POST'])
 def create_file():
     try:
@@ -480,7 +477,6 @@ def create_file():
         logger.exception(f"Error creating file in {path}: {e}")
         return jsonify({'error': str(e)}), 500
 
-# New Route: Move Items
 @app.route('/move_items', methods=['POST'])
 def move_items():
     try:
@@ -536,10 +532,9 @@ def move_items():
         logger.exception(f"Error moving items: {e}")
         return jsonify({'error': str(e)}), 500
 
-# Route to serve static files
 @app.route('/static/<path:filename>')
 def serve_static(filename):
-    return send_from_directory('static', filename)
+    return send_from_directory(app.static_folder, filename)
 
 if __name__ == '__main__':
     # Ensure the base backup directory exists
