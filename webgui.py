@@ -8,14 +8,14 @@ from werkzeug.utils import secure_filename
 import shutil
 from dotenv import load_dotenv
 import pathlib
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 CORS(app, resources={r"/*": {"origins": "*"}})  # Adjust origins as needed for security
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
+# Configure logging Apply ProxyFix to handle 
+# headers from 
+# Nginxlogging.basicConfig(level=logging.INF
 # Load environment variables from the .env file
 load_dotenv()
 
