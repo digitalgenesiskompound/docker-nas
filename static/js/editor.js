@@ -79,17 +79,52 @@ App.saveEditor = function() {
 App.setEditorLanguage = function(extension) {
     const languageMapping = {
         'js': 'javascript',
+        'mjs': 'javascript',
+        'jsx': 'javascript',
+        'ts': 'typescript',
+        'tsx': 'typescriptreact',
         'py': 'python',
+        'pyw': 'python',
         'md': 'markdown',
         'html': 'html',
+        'htm': 'html',
         'css': 'css',
+        'scss': 'scss',
+        'sass': 'scss',
         'json': 'json',
+        'yaml': 'yaml',
+        'yml': 'yaml',
+        'dockerfile': 'dockerfile',
+        'dockerignore': 'plaintext',
+        'sh': 'shell',
+        'bash': 'shell',
+        'zsh': 'shell',
+        'bat': 'bat',
+        'cmd': 'bat',
+        'ini': 'ini',
+        'cfg': 'ini',
+        'log': 'plaintext',
+        'txt': 'plaintext',
+        'env': 'dotenv',
         'java': 'java',
         'c': 'c',
+        'h': 'cpp',
         'cpp': 'cpp',
+        'hpp': 'cpp',
         'cs': 'csharp',
-        // Add more mappings as needed
+        'tsconfig': 'json',
+        'package.json': 'json',
+        'requirements.txt': 'plaintext',
+        'pipfile': 'plaintext',
+        'toml': 'toml',
+        'lock': 'plaintext', // For lock files (e.g., package-lock.json, Pipfile.lock)
+        'xml': 'xml',
+        'svg': 'xml',
+        'tsx': 'typescriptreact',
+        'jsx': 'javascriptreact',
+        // Add additional extensions as needed
     };
-    const language = languageMapping[extension] || 'plaintext';
+    const language = languageMapping[extension.toLowerCase()] || 'plaintext';
     monaco.editor.setModelLanguage(App.editor.getModel(), language);
 };
+
