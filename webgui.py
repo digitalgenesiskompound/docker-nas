@@ -13,10 +13,14 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 app = Flask(__name__, static_folder='static', template_folder='templates')
 CORS(app, resources={r"/*": {"origins": "*"}})  # Adjust origins as needed for security
 
-# Configure logging Apply ProxyFix to handle 
-# headers from 
-# Nginxlogging.basicConfig(level=logging.INF
-# Load environment variables from the .env file
+
+# Apply ProxyFix to handle headers from Nginx
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__
+
 load_dotenv()
 
 # Get environment variables
