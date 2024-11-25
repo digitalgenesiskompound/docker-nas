@@ -19,7 +19,7 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
