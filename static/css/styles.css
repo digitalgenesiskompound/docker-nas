@@ -37,9 +37,8 @@ body {
 .main-content {
     flex: 1;
     padding-top: 60px;
-    margin-left: 75px;
-    margin-right: 75px;
-    padding: 30px;
+    margin-left: 5%;
+    margin-right: 5%;
     overflow-y: auto;
     position: relative;
     z-index: 1; /* Ensure main content is below the hamburger menu */
