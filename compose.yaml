@@ -6,6 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: docker-nas
+    restart: unless-stopped
     environment:
       - USERNAME=${USERNAME}
       - VOLUME=${VOLUME}
