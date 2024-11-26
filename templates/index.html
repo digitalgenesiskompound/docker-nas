@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Docker Volume Explorer</title>
     
     <!-- Load Bootstrap CSS first -->
@@ -18,12 +19,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.1/min/vs/loader.min.js"></script>
 </head>
 <body>
-    <div class="sidebar">
-        <h2>Navigation</h2>
-        <ul id="sidebar-list">
-            <!-- Sidebar items will be dynamically loaded here -->
-        </ul>
-    </div>
     <div class="main-content">
         <h1>
             <i class="bi bi-folder folder-icon"></i>
@@ -145,6 +140,16 @@
     </div>
 </div>
 
+<!-- Hamburger Menu -->
+<div class="hamburger-menu" id="hamburger-menu" aria-label="Menu" role="button" tabindex="0">
+    <i class="bi bi-list"></i>
+    <div class="dropdown-menu" id="hamburger-dropdown">
+        <a href="{{ url_for('logout') }}" class="dropdown-item">
+            <i class="bi bi-box-arrow-right"></i> Logout
+        </a>
+    </div>
+</div>
+
 <!-- Progress Tray -->
 <div id="progress-tray" class="progress-tray">
     <button id="toggle-progress-tray" class="toggle-tray-button">
@@ -165,6 +170,6 @@
     <script src="/static/js/modals.js"></script>
     <script src="/static/js/uploadDownload.js"></script>
     <script src="/static/js/editor.js"></script>
-    <script src="/static/js/progressTray.js"></script> <!-- If using separate progress tray script -->
+    <script src="/static/js/progressTray.js"></script>
 </body>
 </html>
