@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     App.setupNavigationButtons();
     App.setupEditor();
     App.setupProgressTray();
+    App.setupHamburgerMenu();
 });
 
 App.setupNavigationButtons = function() {
@@ -45,6 +46,36 @@ App.setupNavigationButtons = function() {
         if (App.currentPath !== '') {
             App.navigationHistory.push(App.currentPath); // Push current path to history before navigating
             App.loadDirectory('');
+        }
+    });
+};
+
+App.setupHamburgerMenu = function() {
+    const hamburgerMenu = document.getElementById('hamburger-menu');
+    const dropdownMenu = document.getElementById('hamburger-dropdown');
+
+    console.log('hamburgerMenu:', hamburgerMenu);
+    console.log('dropdownMenu:', dropdownMenu);
+
+    if (!hamburgerMenu) {
+        console.error("Hamburger menu element not found.");
+        return;
+    }
+    if (!dropdownMenu) {
+        console.error("Dropdown menu element not found.");
+        return;
+    }
+
+    // Toggle the dropdown menu when hamburger menu is clicked
+    hamburgerMenu.addEventListener('click', function(event) {
+        event.stopPropagation(); // Prevent event from bubbling up
+        dropdownMenu.classList.toggle('show'); // Toggle 'show' class
+    });
+
+    // Close the dropdown if clicking outside of it
+    document.addEventListener('click', function(event) {
+        if (!hamburgerMenu.contains(event.target)) {
+            dropdownMenu.classList.remove('show');
         }
     });
 };

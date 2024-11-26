@@ -10,7 +10,8 @@ services:
       - USERNAME=${USERNAME}
       - VOLUME=${VOLUME}
     volumes:
-      - /home/ngk/docker-nas:${VOLUME}
+      - nas:${VOLUME}
+      - data:/data:rw
     ports:
       - "8080:5000"
     networks:
@@ -36,6 +37,7 @@ services:
 
 volumes:
   nas: 
+  data:
 
 networks:
   nas-network:
