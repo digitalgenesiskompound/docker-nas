@@ -18,13 +18,9 @@ from Crypto.Protocol.KDF import PBKDF2
 from Crypto.Util.Padding import unpad
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
-<<<<<<< HEAD
 import pathlib
-=======
 from auth.utils import check_password
-
 from config import DATA_DIR, CREDENTIALS_FILE, VOLUME, USERNAME  # Ensure these are correctly defined in config.py
->>>>>>> db969f2 (birth2.0)
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -280,12 +276,7 @@ def upload_files():
             return jsonify({'error': 'No files uploaded.'}), 400
 
         for file in uploaded_files:
-<<<<<<< HEAD
-            # Use the filename as the relative path
-            relative_path = file.filename  # Includes relative directories
-=======
             relative_path = secure_relative_path(file.filename)
->>>>>>> db969f2 (birth2.0)
             if relative_path.startswith('/') or '..' in relative_path:
                 logger.error(f"Invalid file path: {relative_path}")
                 return jsonify({'error': 'Invalid file path.'}), 400
