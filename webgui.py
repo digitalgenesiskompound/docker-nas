@@ -10,7 +10,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import zipfile
 import io
-from werkzeug.utils import secure_filename
+import pathlib
+import json
 import shutil
 import base64
 from Crypto.Cipher import AES
@@ -18,24 +19,23 @@ from Crypto.Protocol.KDF import PBKDF2
 from Crypto.Util.Padding import unpad
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
-import pathlib
 from auth.utils import check_password
+
 from config import DATA_DIR, CREDENTIALS_FILE, VOLUME, USERNAME  # Ensure these are correctly defined in config.py
 
-app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+app = Flask(__name__, static_folder='static', template_folder='templates')
+CORS(app, resources={r"/*": {"origins": "*"}})  # Adjust origins as needed for security
+
+# Apply ProxyFix to handle headers from Nginx
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Load environment variables from the .env file
 load_dotenv()
 
-# Get environment variables
-VOLUME = os.getenv("VOLUME")
-USERNAME = os.getenv("USERNAME")
-
+# Set maximum file size for uploads (5 GB)
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024 * 1024  # 5 GB limit per file
 
 # Load SECRET_KEY from credentials.json if user exists, else use default (will be overwritten during setup)
@@ -150,16 +150,20 @@ def secure_path(path):
     return abs_path
 
 def secure_relative_path(relative_path):
-    # Split the path and secure each part
+    """
+    Secure each part of the relative path to prevent directory traversal.
+    """
     parts = pathlib.PurePosixPath(relative_path).parts
     safe_parts = [secure_filename(part) for part in parts]
     return os.path.join(*safe_parts)
 
 @app.route('/')
+@login_required
 def index():
     return render_template('index.html')
 
 @app.route('/api/list', methods=['GET'])
+@login_required
 def list_directory():
     path = request.args.get('path', '')
     logger.info(f"Listing directory: {path}")
@@ -210,6 +214,7 @@ def list_directory():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/search', methods=['GET'])
+@login_required
 def search():
     query = request.args.get('query', '').lower()
     if not query:
@@ -251,6 +256,8 @@ def search():
     })
 
 @app.route('/upload', methods=['POST'])
+@login_required
+@csrf.exempt
 def upload_files():
     try:
         passphrase = request.form.get('passphrase', '')
@@ -281,15 +288,12 @@ def upload_files():
                 logger.error(f"Invalid file path: {relative_path}")
                 return jsonify({'error': 'Invalid file path.'}), 400
 
-            # Secure the relative path
             safe_relative_path = secure_relative_path(relative_path)
-            # Split the relative path to handle directories
             relative_dirs, filename = os.path.split(safe_relative_path)
             final_dir = os.path.join(target_dir, relative_dirs)
-            os.makedirs(final_dir, exist_ok=True)  # Create directories as needed
+            os.makedirs(final_dir, exist_ok=True)
 
             file_path = os.path.join(final_dir, filename)
-            # Prevent overwriting existing files
             if os.path.exists(file_path):
                 logger.error(f'File "{file_path}" already exists.')
                 return jsonify({'error': f'File "{file_path}" already exists.'}), 400
@@ -303,8 +307,9 @@ def upload_files():
         logger.exception(f"Error uploading files to {path}: {e}")
         return jsonify({'error': str(e)}), 500
 
-
 @app.route('/delete', methods=['POST'])
+@login_required
+@csrf.exempt
 def delete_item():
     try:
         data = request.get_json()
@@ -409,8 +414,9 @@ def download_all():
         logger.exception(f"Error creating ZIP: {e}")
         return jsonify({'error': f"An error occurred while creating ZIP: {str(e)}"}), 500
 
-
 @app.route('/download_selected', methods=['POST'])
+@login_required
+@csrf.exempt
 def download_selected():
     try:
         data = request.get_json()
@@ -433,9 +439,11 @@ def download_selected():
 
         logger.info(f"Creating ZIP for selected items: {selected_paths}")
 
-        # Handle single selection
+        # If only one file or directory is selected, handle accordingly
         if len(absolute_paths) == 1:
             selected_path = absolute_paths[0]
+            relative_path = os.path.relpath(selected_path, VOLUME).replace("\\", "/")
+
             if os.path.isfile(selected_path):
                 if selected_path.endswith('.enc'):
                     decrypted_data = decrypt_file(selected_path, passphrase)
@@ -459,7 +467,7 @@ def download_selected():
                         download_name=os.path.basename(selected_path)
                     )
             elif os.path.isdir(selected_path):
-                # Create ZIP with decrypted files
+                # Create a zip of the selected directory with decrypted files
                 zip_buffer = io.BytesIO()
                 with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                     for root, dirs, files in os.walk(selected_path):
@@ -468,7 +476,7 @@ def download_selected():
                             if file_path.endswith('.enc'):
                                 decrypted_data = decrypt_file(file_path, passphrase)
                                 if decrypted_data is None:
-                                    continue
+                                    continue  # Skip if decryption fails
                                 relative_file_path = os.path.relpath(file_path, VOLUME).replace('.enc', '').replace("\\", "/")
                                 zip_file.writestr(relative_file_path, decrypted_data)
                             else:
@@ -476,6 +484,7 @@ def download_selected():
                                 zip_file.write(file_path, relative_file_path)
                 zip_buffer.seek(0)
                 zip_filename = f"{USERNAME}-{os.path.basename(selected_path)}.zip"
+                logger.info(f"Serving ZIP file: {zip_filename}")
                 return Response(
                     zip_buffer,
                     mimetype='application/zip',
@@ -485,9 +494,10 @@ def download_selected():
                     }
                 )
             else:
+                logger.error(f"Selected path is neither a file nor a directory: {selected_path}")
                 return jsonify({'error': "Selected path is neither a file nor a directory."}), 400
 
-        # Handle multiple selections
+        # For multiple selections, create a zip containing all selected files and directories
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
             for selected_path in absolute_paths:
@@ -519,6 +529,7 @@ def download_selected():
         zip_data = zip_buffer.getvalue()
 
         zip_filename = f"{USERNAME}-selected.zip"
+        logger.info(f"Serving ZIP file: {zip_filename}")
         return Response(
             zip_buffer,
             mimetype='application/zip',
@@ -532,9 +543,8 @@ def download_selected():
         logger.exception(f"Error creating ZIP for selected items: {e}")
         return jsonify({'error': f"An error occurred while creating ZIP: {str(e)}"}), 500
 
-
-
 @app.route('/api/get_file_content', methods=['GET'])
+@login_required
 def get_file_content():
     try:
         path = request.args.get('path', '')
@@ -556,6 +566,8 @@ def get_file_content():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/save_file_content', methods=['POST'])
+@login_required
+@csrf.exempt
 def save_file_content():
     try:
         data = request.get_json()
@@ -581,12 +593,18 @@ def save_file_content():
         logger.exception(f"Error saving file content for {path}: {e}")
         return jsonify({'error': str(e)}), 500
 
-# New Route: Create Folder
 @app.route('/create_folder', methods=['POST'])
+@login_required
+@csrf.exempt
 def create_folder():
     try:
+        # Validate incoming JSON
         data = request.get_json()
-        path = data.get('path', '')
+        if not data:
+            return jsonify({'error': 'Invalid JSON data.'}), 400
+
+        # Extract and validate the fields
+        path = data.get('path', '').strip()
         folder_name = data.get('folder_name', '').strip()
 
         if not folder_name:
@@ -610,12 +628,18 @@ def create_folder():
         logger.exception(f"Error creating folder in {path}: {e}")
         return jsonify({'error': str(e)}), 500
 
-# New Route: Create File
 @app.route('/create_file', methods=['POST'])
+@login_required
+@csrf.exempt
 def create_file():
     try:
+        # Validate incoming JSON
         data = request.get_json()
-        path = data.get('path', '')
+        if not data:
+            return jsonify({'error': 'Invalid JSON data.'}), 400
+
+        # Extract and validate the fields
+        path = data.get('path', '').strip()
         file_name = data.get('file_name', '').strip()
 
         if not file_name:
@@ -642,8 +666,9 @@ def create_file():
         logger.exception(f"Error creating file in {path}: {e}")
         return jsonify({'error': str(e)}), 500
 
-# New Route: Move Items
 @app.route('/move_items', methods=['POST'])
+@login_required
+@csrf.exempt
 def move_items():
     try:
         data = request.get_json()
@@ -655,8 +680,13 @@ def move_items():
         if not source_paths:
             return jsonify({'error': 'No source paths provided.'}), 400
 
-        # Secure the target directory; empty string represents root
-        secure_destination_path = secure_path(destination_path)
+        # Handle empty destination_path (root directory)
+        if destination_path == '':
+            secure_destination_path = VOLUME  # Use the root volume directory
+        else:
+            secure_destination_path = secure_path(destination_path)
+
+        logger.debug(f"Secure destination path: {secure_destination_path}")
 
         # Ensure the target directory exists
         if not os.path.exists(secure_destination_path):
@@ -698,8 +728,8 @@ def move_items():
         logger.exception(f"Error moving items: {e}")
         return jsonify({'error': str(e)}), 500
 
-# Route to serve static files
 @app.route('/static/<path:filename>')
+@login_required
 def serve_static(filename):
     return send_from_directory(app.static_folder, filename)
 
@@ -742,7 +772,7 @@ def decrypt_file(file_path, passphrase):
 
 
 if __name__ == '__main__':
-    # Ensure the base backup directory exists
+    # Ensure the base directory exists
     if not os.path.exists(VOLUME):
         os.makedirs(VOLUME)
     app.run(host='0.0.0.0', port=5000)

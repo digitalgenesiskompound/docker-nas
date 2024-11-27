@@ -17,14 +17,11 @@
     <link rel="stylesheet" type="text/css" href="/static/css/styles.css">
 </head>
 <body>
-    <div class="sidebar">
-        <h2>Navigation</h2>
-        <ul id="sidebar-list">
-            <!-- Sidebar items will be dynamically loaded here -->
-        </ul>
-    </div>
     <div class="main-content">
-        <h1>📁 Docker Volume Explorer</h1>
+        <h1>
+            <i class="bi bi-folder folder-icon"></i>
+            Docker Volume Explorer
+        </h1>
         <!-- Breadcrumb Navigation with Back and Home Buttons -->
         <div class="breadcrumbs">
             <div class="nav-buttons">
@@ -39,24 +36,24 @@
     <!-- Action Buttons, Upload, Search Bar, and Sort Dropdown -->
     <div class="action-group">
         <div class="button-group">
-            <button id="download-all-button" class="download-button" onclick="downloadAll()">Download All as ZIP</button>
+            <button id="download-all-button" class="download-button" onclick="App.downloadAll()">Download All as ZIP</button>
             
             <!-- Upload File Button -->
             <button id="upload-file-button" class="upload-button" onclick="document.getElementById('upload-file-input').click()">Upload File</button>
-            <input type="file" id="upload-file-input" style="display: none;" multiple onchange="uploadFiles()">
+            <input type="file" id="upload-file-input" style="display: none;" multiple onchange="App.uploadFiles()">
             
             <!-- Upload Folder Button -->
             <button id="upload-folder-button" class="upload-button" onclick="document.getElementById('upload-folder-input').click()">Upload Folder</button>
-            <input type="file" id="upload-folder-input" style="display: none;" webkitdirectory multiple onchange="uploadFolders()">
+            <input type="file" id="upload-folder-input" style="display: none;" webkitdirectory multiple onchange="App.uploadFolders()">
             
             <!-- Existing Add Folder and Add File Buttons -->
-            <button id="add-folder-button" class="add-folder-button" onclick="openAddFolderModal()">Add Folder</button>
-            <button id="add-file-button" class="add-file-button" onclick="openAddFileModal()">Add File</button>
-            <!-- <button id="move-selected-button" class="move-button" onclick="openMoveModal()">Move Selected</button> -->
+            <button id="add-folder-button" class="add-folder-button" onclick="App.openAddFolderModal()">Add Folder</button>
+            <button id="add-file-button" class="add-file-button" onclick="App.openAddFileModal()">Add File</button>
+            <!-- <button id="move-selected-button" class="move-button" onclick="App.openMoveModal()">Move Selected</button> -->
         </div>
         <div class="search-sort-group">
-            <input type="text" id="search-bar" placeholder="Search files and folders..." oninput="searchFiles()">
-            <select id="sort-dropdown" onchange="sortFiles()">
+            <input type="text" id="search-bar" placeholder="Search files and folders..." oninput="App.searchFiles()">
+            <select id="sort-dropdown" onchange="App.sortFiles()">
                 <option value="name_asc">Name (A-Z)</option>
                 <option value="name_desc">Name (Z-A)</option>
                 <option value="date_asc">Date Modified (Oldest)</option>
@@ -67,7 +64,7 @@
         </div>
     </div>
 
-        
+
         <!-- Directory and File Listing -->
         <form id="file-list-form">
             <ul class="file-list" id="file-list">
@@ -78,15 +75,15 @@
 
     <!-- Selected Items Side Panel -->
     <div id="selected-items-panel" class="selected-items-panel">
-        <button class="close-button" onclick="closeSelectedItemsPanel()">&times;</button>
+        <button class="close-button" onclick="App.closeSelectedItemsPanel()">&times;</button>
         <h3>Selected Items</h3>
         <ul id="selected-items-list">
             <!-- Selected items will be listed here -->
         </ul>
-        <button class="side-panel-button" onclick="performAction('download')">Download Selected</button>
-        <button class="side-panel-button" onclick="performAction('edit')">Edit Selected</button>
-        <button class="move-button side-panel-button" onclick="performAction('move')">Move Selected</button> <!-- New Move Button -->
-        <button class="delete-button side-panel-button" onclick="performAction('delete')">Delete Selected</button>
+        <button class="side-panel-button" onclick="App.performAction('download')">Download Selected</button>
+        <button class="side-panel-button" onclick="App.performAction('edit')">Edit Selected</button>
+        <button class="move-button side-panel-button" onclick="App.performAction('move')">Move Selected</button> <!-- New Move Button -->
+        <button class="delete-button side-panel-button" onclick="App.performAction('delete')">Delete Selected</button>
     </div>
 
     <!-- Loading Spinner -->
@@ -97,7 +94,7 @@
     <!-- Destination Selection Modal -->
     <div id="destination-modal" class="modal">
         <div class="modal-content">
-            <span class="close" onclick="closeDestinationModal()">&times;</span>
+            <span class="close" onclick="App.closeDestinationModal()">&times;</span>
             <h2>Select Destination Folder</h2>
             <div id="destination-breadcrumb" class="breadcrumb-links">
                 <a href="#" data-path="">Root</a>
@@ -105,18 +102,18 @@
             <ul id="destination-folder-list" class="file-list">
                 <!-- Destination folders will be dynamically loaded here -->
             </ul>
-            <button id="confirm-move-button" class="side-panel-button" onclick="confirmMove()">Confirm Move</button>
+            <button id="confirm-move-button" class="side-panel-button" onclick="App.confirmMove()">Confirm Move</button>
         </div>
     </div>
 
 <!-- Monaco Editor Modal -->
 <div id="editor-modal" class="editor-modal" style="display: none;">
     <div class="editor-modal-content">
-        <button class="close-editor" onclick="closeEditor()">&times;</button> <!-- Close Button -->
+        <button class="close-editor" onclick="App.closeEditor()">&times;</button> <!-- Close Button -->
         <div id="editor" style="width: 100%; height: 80vh;"></div>
         <div class="editor-buttons">
-            <button id="save-editor-button" class="side-panel-button" onclick="saveEditor()">Save</button>
-            <button id="close-editor-button" class="side-panel-button" onclick="closeEditor()">Close</button> <!-- Close Button -->
+            <button id="save-editor-button" class="side-panel-button" onclick="App.saveEditor()">Save</button>
+            <button id="close-editor-button" class="side-panel-button" onclick="App.closeEditor()">Close</button> <!-- Close Button -->
         </div>
     </div>
 </div>
@@ -124,17 +121,17 @@
 <!-- Add Folder Modal -->
 <div id="add-folder-modal" class="modal">
     <div class="modal-content">
-        <span class="close" onclick="closeAddFolderModal()">&times;</span>
+        <span class="close" onclick="App.closeAddFolderModal()">&times;</span>
         <h2>Add New Folder</h2>
         <input type="text" id="new-folder-name" placeholder="Enter folder name">
-        <button onclick="submitAddFolder()">Create Folder</button>
+        <button onclick="App.submitAddFolder()">Create Folder</button>
     </div>
 </div>
 
 <!-- Add File Modal -->
 <div id="add-file-modal" class="modal">
     <div class="modal-content">
-        <span class="close" onclick="closeAddFileModal()">&times;</span>
+        <span class="close" onclick="App.closeAddFileModal()">&times;</span>
         <h2>Add New File</h2>
         <input type="text" id="new-file-name" placeholder="Enter file name">
         <button onclick="App.submitAddFile()">Create File</button>
@@ -145,7 +142,7 @@
 <div class="hamburger-menu" id="hamburger-menu" aria-label="Menu" role="button" tabindex="0">
     <i class="bi bi-list"></i>
     <div class="dropdown-menu" id="hamburger-dropdown">
-        <a href="#" class="dropdown-item" onclick="App.logout()">
+        <a href="{{ url_for('logout') }}" class="dropdown-item">
             <i class="bi bi-box-arrow-right"></i> Logout
         </a>
     </div>
