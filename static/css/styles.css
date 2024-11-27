@@ -7,7 +7,7 @@
 
 /* General page styling */
 body {
-    font-family: 'Arial', sans-serif;
+    /* font-family: 'Arial', sans-serif; */
     background-color: #1f1f1f; /* Dark background */
     color: #e0e0e0; /* Light text for contrast */
     display: flex;
@@ -15,53 +15,33 @@ body {
     overflow: hidden;
 }
 
-/* Sidebar styling */
-.sidebar {
-    width: 250px;
-    background-color: #2c2c2c; /* Slightly lighter dark background */
-    padding: 20px;
-    overflow-y: auto;
-    border-right: 1px solid #444;
+.header {
     position: relative;
-    z-index: 100; /* Ensure sidebar is above main content */
+    width: 100%;
+    height: 60px; /* Adjust as needed */
+    background-color: #1f1f1f; /* Match your theme */
+    display: flex;
+    align-items: center;
+    padding-left: 20px;
+    z-index: 1000;
 }
 
-.sidebar h2 {
+.header h1 {
     color: #ffffff;
-    margin-bottom: 15px;
-    font-size: 1.2em;
-    text-align: center;
-}
-
-.sidebar ul {
-    list-style: none;
-}
-
-.sidebar li {
-    margin-bottom: 10px;
-}
-
-.sidebar a {
-    color: #ffffff;
-    text-decoration: none;
-    display: block;
-    padding: 8px 12px;
-    border-radius: 4px;
-    transition: background-color 0.3s, color 0.3s;
-}
-
-.sidebar a:hover {
-    background-color: #444;
-    color: #ffffff;
+    font-weight: bold;
+    font-size: 1.5em;
+    margin-left: 20px;
 }
 
 /* Main content styling */
 .main-content {
     flex: 1;
-    padding: 30px;
+    padding-top: 60px;
+    margin-left: 5%;
+    margin-right: 5%;
     overflow-y: auto;
     position: relative;
-    z-index: 1; /* Ensure main content is below the sidebar */
+    z-index: 1; /* Ensure main content is below the hamburger menu */
 }
 
 h1 {
@@ -70,6 +50,80 @@ h1 {
     margin-bottom: 20px;
     font-size: 2em;
     text-align: center;
+}
+
+.btn-white-grey {
+    background-color: #ffffff; /* White background */
+    color: #6c757d; /* Dark grey text */
+    border: 1px solid #6c757d; /* Dark grey border */
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    font-size: 16px;
+    text-decoration: none;
+    border-radius: 6px;
+    transition: background-color 0.3s, color 0.3s, border-color 0.3s, transform 0.2s;
+}
+
+.btn-white-grey:hover {
+    background-color: #e0e0e0; /* Light grey on hover */
+    color: #5a6268; /* Darker grey text on hover */
+    border-color: #5a6268; /* Darker grey border on hover */
+    transform: translateY(-2px); /* Slight lift on hover */
+}
+
+/* Hamburger Menu */
+.hamburger-menu {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    cursor: pointer;
+    z-index: 1001; /* Ensure it appears above other elements */
+}
+
+.hamburger-menu i {
+    font-size: 1.8em;
+    color: #ffffff; /* White color for the icon */
+    transition: color 0.3s;
+}
+
+.hamburger-menu:hover i {
+    color: #e0e0e0; /* Slightly lighter on hover */
+}
+
+.hamburger-menu .dropdown-menu {
+    display: none; /* Hidden by default */
+    position: absolute;
+    top: 40px; /* Adjust based on icon size */
+    left: 0;
+    background-color: #2c2c2c; /* Match existing dark background */
+    border: 1px solid #444;
+    border-radius: 6px;
+    min-width: 150px;
+    padding: 10px 0;
+    z-index: 1002; /* Ensure it appears above the hamburger menu */
+}
+
+.hamburger-menu .dropdown-menu.show {
+    display: block; /* Show when 'show' class is added */
+}
+
+.hamburger-menu .dropdown-menu .dropdown-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 20px;
+    color: #ffffff;
+    text-decoration: none;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+.hamburger-menu .dropdown-menu .dropdown-item i {
+    margin-right: 10px;
+}
+
+.hamburger-menu .dropdown-menu .dropdown-item:hover {
+    background-color: #444;
+    color: #ffffff;
 }
 
 /* Progress Bar */
