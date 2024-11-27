@@ -1,24 +1,46 @@
 ---
 
 services:
-  docker-nas:
+  web:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: docker-nas
+    restart: unless-stopped
     environment:
       - USERNAME=${USERNAME}
       - VOLUME=${VOLUME}
     volumes:
       - nas:${VOLUME}
+      - data:/data:rw
     ports:
       - "8080:5000"
     networks:
       - nas-network
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: docker-nas-nginx
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/ssl:/etc/nginx/ssl
+      - ./static:/app/static
+    networks:
+      - nas-network
+    depends_on:
+      - web
+
 volumes:
   nas: 
+  data:
 
 networks:
   nas-network:
     driver: bridge
-      
+  
