@@ -1,4 +1,6 @@
 Flask==3.1.0
+Flask-Login==0.6.3
+Flask-WTF==1.2.2
 Flask-CORS==3.0.10
 python-dotenv==1.0.1
 werkzeug==3.1.3
