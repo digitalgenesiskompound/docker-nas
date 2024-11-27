@@ -1,22 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Docker Volume Explorer</title>
-        
-        <!-- Load Bootstrap CSS first -->
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-        
-        <!-- Bootstrap Icons for visual cues -->
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-        
-        <!-- Load custom styles after Bootstrap -->
-        <link rel="stylesheet" type="text/css" href="/static/styles.css">
-        
-        <!-- Monaco Editor CDN -->
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.1/min/vs/loader.min.js"></script>
-    </head>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker Volume Explorer</title>
+    
+    <!-- Load Bootstrap CSS first -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Bootstrap Icons for visual cues -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    
+    <!-- Load custom styles after Bootstrap -->
+    <link rel="stylesheet" type="text/css" href="/static/css/styles.css">
+</head>
 <body>
     <div class="sidebar">
         <h2>Navigation</h2>
@@ -138,7 +137,17 @@
         <span class="close" onclick="closeAddFileModal()">&times;</span>
         <h2>Add New File</h2>
         <input type="text" id="new-file-name" placeholder="Enter file name">
-        <button onclick="submitAddFile()">Create File</button>
+        <button onclick="App.submitAddFile()">Create File</button>
+    </div>
+</div>
+
+<!-- Hamburger Menu -->
+<div class="hamburger-menu" id="hamburger-menu" aria-label="Menu" role="button" tabindex="0">
+    <i class="bi bi-list"></i>
+    <div class="dropdown-menu" id="hamburger-dropdown">
+        <a href="#" class="dropdown-item" onclick="App.logout()">
+            <i class="bi bi-box-arrow-right"></i> Logout
+        </a>
     </div>
 </div>
 
@@ -151,10 +160,21 @@
         <!-- Individual progress bars will be dynamically added here -->
     </div>
 </div>
-
-
-    <!-- Reference to External JavaScript File -->
-    <script src="/static/scripts.js"></script>
-    <script src="/static/draganddrop.js"></script>
+    <!-- Crypto.JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/pad-pkcs7.min.js"></script>
+    <!-- Reference to External JavaScript Files -->
+    <script src="/static/js/encryption.js"></script>
+    <script src="/static/js/main.js"></script>
+    <!-- Then load utils.js, which may extend App -->
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/directory.js"></script>
+    <script src="/static/js/selection.js"></script>
+    <script src="/static/js/modals.js"></script>
+    <script src="/static/js/uploadDownload.js"></script>
+    <script src="/static/js/editor.js"></script>
+    <script src="/static/js/progressTray.js"></script>
+    <!-- Monaco Editor CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.1/min/vs/loader.min.js"></script>
 </body>
 </html>

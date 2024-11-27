@@ -1,0 +1,163 @@
+<!-- templates/setup.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker Volume Explorer - Setup</title>
+    
+    <!-- Load Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    
+    <!-- Custom Styles -->
+    <link rel="stylesheet" type="text/css" href="/static/css/setup.css">
+</head>
+<body>
+    <div class="auth-wrapper">
+        <div class="auth-container">
+            <h1 class="mb-3">
+                <i class="bi bi-pencil-square"></i> Welcome to Docker Volume Explorer
+            </h1>
+            <h4 class="mb-4">First Time Setup</h4>
+            
+            <form method="POST" id="setup-form">
+                {{ form.hidden_tag() }}
+                <div class="mb-3">
+                    {{ form.username.label(class="form-label") }}
+                    {{ form.username(class="form-control", placeholder="Enter Username") }}
+                </div>
+                <div class="mb-3">
+                    {{ form.passphrase.label(class="form-label") }}
+                    {{ form.passphrase(class="form-control", placeholder="Enter Encryption Passphrase") }}
+                    <small class="form-text text-muted">Remember this key to encrypt/decrypt your files.</small>
+                </div>
+                <div class="mb-3">
+                    {{ form.confirm_passphrase.label(class="form-label") }}
+                    {{ form.confirm_passphrase(class="form-control", placeholder="Confirm Encryption Passphrase") }}
+                    {% if form.confirm_passphrase.errors %}
+                        <div class="text-danger">
+                            {% for error in form.confirm_passphrase.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="mb-3">
+                    {{ form.password.label(class="form-label") }}
+                    {{ form.password(class="form-control", placeholder="Enter Password") }}
+                    <ul class="password-requirements">
+                        <li id="length" class="invalid">At least 8 characters</li>
+                        <li id="uppercase" class="invalid">At least one uppercase letter</li>
+                        <li id="lowercase" class="invalid">At least one lowercase letter</li>
+                        <li id="number" class="invalid">At least one number</li>
+                        <li id="special" class="invalid">At least one special character (!@#$%^&*)</li>
+                    </ul>
+                </div>
+                <div class="mb-3">
+                    {{ form.confirm_password.label(class="form-label") }}
+                    {{ form.confirm_password(class="form-control", placeholder="Confirm Password") }}
+                    <div id="password-match" class="validation-message"></div>
+                </div>
+                <button type="submit" class="btn-submit w-100">Create Account</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Setup Page JavaScript -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const password = document.getElementById('password');
+            const confirm_password = document.getElementById('confirm_password');
+            const passwordMatch = document.getElementById('password-match');
+            
+            const requirements = {
+                length: document.getElementById('length'),
+                uppercase: document.getElementById('uppercase'),
+                lowercase: document.getElementById('lowercase'),
+                number: document.getElementById('number'),
+                special: document.getElementById('special')
+            };
+            
+            function validatePassword() {
+                const pwd = password.value;
+                
+                // Validate length
+                if (pwd.length >= 8) {
+                    requirements.length.classList.remove('invalid');
+                    requirements.length.classList.add('valid');
+                } else {
+                    requirements.length.classList.remove('valid');
+                    requirements.length.classList.add('invalid');
+                }
+                
+                // Validate uppercase letters
+                if (/[A-Z]/.test(pwd)) {
+                    requirements.uppercase.classList.remove('invalid');
+                    requirements.uppercase.classList.add('valid');
+                } else {
+                    requirements.uppercase.classList.remove('valid');
+                    requirements.uppercase.classList.add('invalid');
+                }
+                
+                // Validate lowercase letters
+                if (/[a-z]/.test(pwd)) {
+                    requirements.lowercase.classList.remove('invalid');
+                    requirements.lowercase.classList.add('valid');
+                } else {
+                    requirements.lowercase.classList.remove('valid');
+                    requirements.lowercase.classList.add('invalid');
+                }
+                
+                // Validate numbers
+                if (/[0-9]/.test(pwd)) {
+                    requirements.number.classList.remove('invalid');
+                    requirements.number.classList.add('valid');
+                } else {
+                    requirements.number.classList.remove('valid');
+                    requirements.number.classList.add('invalid');
+                }
+                
+                // Validate special characters
+                if (/[!@#$%^&*]/.test(pwd)) {
+                    requirements.special.classList.remove('invalid');
+                    requirements.special.classList.add('valid');
+                } else {
+                    requirements.special.classList.remove('valid');
+                    requirements.special.classList.add('invalid');
+                }
+            }
+            
+            function checkPasswordMatch() {
+                if (password.value === confirm_password.value && password.value !== '') {
+                    passwordMatch.textContent = '';
+                } else {
+                    passwordMatch.textContent = 'Passwords do not match.';
+                }
+            }
+            
+            password.addEventListener('input', function() {
+                validatePassword();
+                checkPasswordMatch();
+            });
+            
+            confirm_password.addEventListener('input', checkPasswordMatch);
+            
+            // Optional: Prevent form submission if validations fail
+            const form = document.getElementById('setup-form');
+            form.addEventListener('submit', function(e) {
+                const allValid = Object.values(requirements).every(req => req.classList.contains('valid'));
+                if (!allValid || password.value !== confirm_password.value) {
+                    e.preventDefault();
+                    alert('Please ensure all password requirements are met and passwords match.');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

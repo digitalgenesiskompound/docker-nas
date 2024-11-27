@@ -1,13 +1,30 @@
 import logging
-from flask import Flask, send_file, send_from_directory, abort, render_template, request, Response, jsonify
+from flask import Flask, send_file, send_from_directory, abort, render_template, request, Response, jsonify, redirect, url_for, flash, session
 from flask_cors import CORS
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask_wtf.csrf import CSRFProtect
+from auth.models import user_exists, create_user, get_user
+from auth.forms import SetupForm, LoginForm
+from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import zipfile
 import io
 from werkzeug.utils import secure_filename
 import shutil
+import base64
+from Crypto.Cipher import AES
+from Crypto.Protocol.KDF import PBKDF2
+from Crypto.Util.Padding import unpad
+from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
+<<<<<<< HEAD
 import pathlib
+=======
+from auth.utils import check_password
+
+from config import DATA_DIR, CREDENTIALS_FILE, VOLUME, USERNAME  # Ensure these are correctly defined in config.py
+>>>>>>> db969f2 (birth2.0)
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -24,6 +41,107 @@ VOLUME = os.getenv("VOLUME")
 USERNAME = os.getenv("USERNAME")
 
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024 * 1024  # 5 GB limit per file
+
+# Load SECRET_KEY from credentials.json if user exists, else use default (will be overwritten during setup)
+if user_exists():
+    user = get_user()
+    app.config['SECRET_KEY'] = user.get('secret_key', os.getenv("SECRET_KEY", "your_default_secret_key"))
+else:
+    app.config['SECRET_KEY'] = os.getenv("SECRET_KEY", "your_default_secret_key")
+
+# Initialize CSRF protection
+csrf = CSRFProtect(app)
+
+# Initialize Flask-Login
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+class User(UserMixin):
+    def __init__(self, id):
+        self.id = id
+
+@login_manager.user_loader
+def load_user(user_id):
+    user = get_user()
+    if user and user['username'] == user_id:
+        return User(user['username'])
+    return None
+
+# Route for initial setup
+@app.route('/setup', methods=['GET', 'POST'])
+def setup():
+    if user_exists():
+        return redirect(url_for('login'))
+    
+    form = SetupForm()
+    if form.validate_on_submit():
+        try:
+            username = form.username.data
+            password = form.password.data
+            passphrase = form.passphrase.data
+            confirm_passphrase = form.confirm_passphrase.data  # Ensured by WTForms
+            
+            # Create user
+            create_user(username, password, passphrase)
+            flash('Setup complete. Please log in.', 'success')
+            return redirect(url_for('login'))
+        except Exception as e:
+            logger.exception(f"Error during setup: {e}")
+            flash('An error occurred during setup. Please try again.', 'danger')
+    
+    return render_template('setup.html', form=form)
+
+# Route for login
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if not user_exists():
+        return redirect(url_for('setup'))
+    
+    form = LoginForm()
+    if form.validate_on_submit():
+        try:
+            user = get_user()
+            if user and form.username.data == user['username'] and check_password(form.password.data, user['password']):
+                # Verify passphrase
+                if not check_passphrase(user, form.passphrase.data):
+                    flash('Incorrect encryption key.', 'danger')
+                    return render_template('login.html', form=form)
+                user_obj = User(user['username'])
+                login_user(user_obj)
+                flash('Logged in successfully.', 'success')
+                return redirect(url_for('index'))
+            else:
+                flash('Invalid username or password.', 'danger')
+        except Exception as e:
+            logger.exception(f"Error during login: {e}")
+            flash('An error occurred during login. Please try again.', 'danger')
+    
+    return render_template('login.html', form=form)
+
+def check_passphrase(user, passphrase):
+    stored_hash = user.get('passphrase_hash')
+    if not stored_hash:
+        return False
+    return check_password_hash(stored_hash, passphrase)
+
+# Route for logout
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash('Logged out successfully.', 'success')
+    return redirect(url_for('login'))
+
+# Protect all routes below with login_required
+@app.before_request
+def require_login():
+    allowed_routes = ['login', 'setup', 'static']
+    if user_exists():
+        if request.endpoint == 'setup':
+            return redirect(url_for('login'))
+    if request.endpoint not in allowed_routes and not current_user.is_authenticated:
+        return redirect(url_for('login'))
 
 def secure_path(path):
     """
@@ -139,13 +257,19 @@ def search():
 @app.route('/upload', methods=['POST'])
 def upload_files():
     try:
-        # Get the target path
-        path = request.form.get('path', '')
+        passphrase = request.form.get('passphrase', '')
+        if not passphrase:
+            return jsonify({'error': 'Encryption key is missing.'}), 400
+
+        user = get_user()
+        if not check_passphrase(user, passphrase):
+            return jsonify({'error': 'Incorrect encryption key.'}), 400
+
+        path = request.form.get('path', '').strip()
         target_dir = secure_path(path)
 
         logger.info(f"Uploading files to: {path}")
 
-        # Ensure the target directory exists
         if not os.path.exists(target_dir):
             logger.error(f"Target directory does not exist: {target_dir}")
             return jsonify({'error': 'Target directory does not exist.'}), 400
@@ -156,8 +280,12 @@ def upload_files():
             return jsonify({'error': 'No files uploaded.'}), 400
 
         for file in uploaded_files:
+<<<<<<< HEAD
             # Use the filename as the relative path
             relative_path = file.filename  # Includes relative directories
+=======
+            relative_path = secure_relative_path(file.filename)
+>>>>>>> db969f2 (birth2.0)
             if relative_path.startswith('/') or '..' in relative_path:
                 logger.error(f"Invalid file path: {relative_path}")
                 return jsonify({'error': 'Invalid file path.'}), 400
@@ -234,44 +362,55 @@ def delete_item():
         logger.exception(f"Error deleting items: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/download_all')
+@app.route('/download_all', methods=['POST'])
+@login_required
+@csrf.exempt
 def download_all():
     try:
+        data = request.get_json()
+        passphrase = data.get('passphrase', '')
+
+        if not passphrase:
+            return jsonify({'error': 'Encryption key is missing.'}), 400
+
+        user = get_user()
+        if not check_passphrase(user, passphrase):
+            return jsonify({'error': 'Incorrect encryption key or decryption failed.'}), 400
+
+
         if not os.path.exists(VOLUME):
             logger.error("Backup directory not found.")
             return jsonify({'error': 'Backup directory not found.'}), 500
 
         logger.info("Creating ZIP for all backups.")
 
-        # Create a zip file in-memory
         zip_buffer = io.BytesIO()
+        # Create a zip file in-memory
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
             for root, dirs, files in os.walk(VOLUME):
-                # Add directories (including empty ones)
-                for dir in dirs:
-                    dir_path = os.path.join(root, dir)
-                    relative_dir_path = os.path.relpath(dir_path, VOLUME).replace("\\", "/") + '/'
-                    zip_file.writestr(relative_dir_path, '')  # Add directory entry
-
-                # Add files
                 for file in files:
                     file_path = os.path.join(root, file)
-                    relative_file_path = os.path.relpath(file_path, VOLUME).replace("\\", "/")
-                    zip_file.write(file_path, relative_file_path)
-                    logger.debug(f"Added to ZIP: {relative_file_path}")
+                    if file.endswith('.enc'):
+                        decrypted_data = decrypt_file(file_path, passphrase)
+                        if decrypted_data is None:
+                            continue
+                        relative_path = os.path.relpath(file_path, VOLUME).replace('.enc', '').replace("\\", "/")
+                        zip_file.writestr(relative_path, decrypted_data)
+                    else:
+                        relative_path = os.path.relpath(file_path, VOLUME).replace("\\", "/")
+                        zip_file.write(file_path, relative_path)
 
-        # Set the pointer to the start of the BytesIO buffer
         zip_buffer.seek(0)
+        zip_data = zip_buffer.getvalue()
 
-        # Serve the zip file as a downloadable response with a custom name
         zip_filename = f"{USERNAME}-all.zip"
         logger.info(f"Serving ZIP file: {zip_filename}")
         return Response(
-            zip_buffer,
+            zip_data,
             mimetype='application/zip',
             headers={
                 'Content-Disposition': f'attachment; filename={zip_filename}',
-                'Content-Length': str(zip_buffer.getbuffer().nbytes)  # Set Content-Length
+                'Content-Length': str(len(zip_data))
             }
         )
 
@@ -283,8 +422,16 @@ def download_all():
 @app.route('/download_selected', methods=['POST'])
 def download_selected():
     try:
-        # Get the list of selected paths from the JSON payload
-        selected_paths = request.json.get('selected_paths', [])
+        data = request.get_json()
+        selected_paths = data.get('selected_paths', [])
+        passphrase = data.get('passphrase', '')
+
+        if not passphrase:
+            return jsonify({'error': 'Encryption key is missing.'}), 400
+
+        user = get_user()
+        if not check_passphrase(user, passphrase):
+            return jsonify({'error': 'Incorrect encryption key or decryption failed.'}), 400
 
         if not selected_paths:
             logger.error("No files or directories selected for download.")
@@ -295,74 +442,98 @@ def download_selected():
 
         logger.info(f"Creating ZIP for selected items: {selected_paths}")
 
-        # If only one file or directory is selected, handle accordingly
+        # Handle single selection
         if len(absolute_paths) == 1:
             selected_path = absolute_paths[0]
-            relative_path = os.path.relpath(selected_path, VOLUME).replace("\\", "/")
-
             if os.path.isfile(selected_path):
-                # Serve the single file
-                logger.info(f"Serving single file: {selected_path}")
-                return send_file(
-                    selected_path,
-                    as_attachment=True,
-                    download_name=os.path.basename(selected_path)
-                )
+                if selected_path.endswith('.enc'):
+                    decrypted_data = decrypt_file(selected_path, passphrase)
+                    if decrypted_data is None:
+                        return jsonify({'error': 'Decryption failed.'}), 400
+                    # Send decrypted file
+                    return Response(
+                        decrypted_data,
+                        mimetype='application/octet-stream',
+                        headers={
+                            'Content-Disposition': f'attachment; filename={os.path.basename(selected_path).replace(".enc", "")}',
+                            'Content-Length': str(len(decrypted_data))
+                        }
+                    )
+                else:
+                    # Serve the single file as is
+                    logger.info(f"Serving single file: {selected_path}")
+                    return send_file(
+                        selected_path,
+                        as_attachment=True,
+                        download_name=os.path.basename(selected_path)
+                    )
             elif os.path.isdir(selected_path):
-                # Create a zip of the selected directory
+                # Create ZIP with decrypted files
                 zip_buffer = io.BytesIO()
                 with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                     for root, dirs, files in os.walk(selected_path):
                         for file in files:
                             file_path = os.path.join(root, file)
-                            relative_file_path = os.path.relpath(file_path, VOLUME).replace("\\", "/")
-                            zip_file.write(file_path, relative_file_path)
-                            logger.debug(f"Added to ZIP: {relative_file_path}")
+                            if file_path.endswith('.enc'):
+                                decrypted_data = decrypt_file(file_path, passphrase)
+                                if decrypted_data is None:
+                                    continue
+                                relative_file_path = os.path.relpath(file_path, VOLUME).replace('.enc', '').replace("\\", "/")
+                                zip_file.writestr(relative_file_path, decrypted_data)
+                            else:
+                                relative_file_path = os.path.relpath(file_path, VOLUME).replace("\\", "/")
+                                zip_file.write(file_path, relative_file_path)
                 zip_buffer.seek(0)
                 zip_filename = f"{USERNAME}-{os.path.basename(selected_path)}.zip"
-                logger.info(f"Serving ZIP file: {zip_filename}")
                 return Response(
                     zip_buffer,
                     mimetype='application/zip',
                     headers={
                         'Content-Disposition': f'attachment; filename={zip_filename}',
-                        'Content-Length': str(zip_buffer.getbuffer().nbytes)  # Set Content-Length
+                        'Content-Length': str(zip_buffer.getbuffer().nbytes)
                     }
                 )
             else:
-                logger.error(f"Selected path is neither a file nor a directory: {selected_path}")
                 return jsonify({'error': "Selected path is neither a file nor a directory."}), 400
 
-        # For multiple selections, create a zip containing all selected files and directories
+        # Handle multiple selections
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
             for selected_path in absolute_paths:
                 if os.path.isfile(selected_path):
-                    # Add the file to the zip
-                    relative_path = os.path.relpath(selected_path, VOLUME).replace("\\", "/")
-                    zip_file.write(selected_path, relative_path)
-                    logger.debug(f"Added to ZIP: {relative_path}")
+                    if selected_path.endswith('.enc'):
+                        decrypted_data = decrypt_file(selected_path, passphrase)
+                        if decrypted_data is None:
+                            continue  # Skip if decryption fails
+                        relative_path = os.path.relpath(selected_path, VOLUME).replace('.enc', '').replace("\\", "/")
+                        zip_file.writestr(relative_path, decrypted_data)
+                    else:
+                        relative_path = os.path.relpath(selected_path, VOLUME).replace("\\", "/")
+                        zip_file.write(selected_path, relative_path)
                 elif os.path.isdir(selected_path):
-                    # Add the directory and its contents to the zip
                     for root, dirs, files in os.walk(selected_path):
                         for file in files:
                             file_path = os.path.join(root, file)
-                            relative_path = os.path.relpath(file_path, VOLUME).replace("\\", "/")
-                            zip_file.write(file_path, relative_path)
-                            logger.debug(f"Added to ZIP: {relative_path}")
+                            if file_path.endswith('.enc'):
+                                decrypted_data = decrypt_file(file_path, passphrase)
+                                if decrypted_data is None:
+                                    continue
+                                relative_path = os.path.relpath(file_path, VOLUME).replace('.enc', '').replace("\\", "/")
+                                zip_file.writestr(relative_path, decrypted_data)
+                            else:
+                                relative_path = os.path.relpath(file_path, VOLUME).replace("\\", "/")
+                                zip_file.write(file_path, relative_path)
 
-        # Set the pointer to the start of the BytesIO buffer
         zip_buffer.seek(0)
+        zip_data = zip_buffer.getvalue()
 
-        # Serve the zip file as a downloadable response with a custom name
         zip_filename = f"{USERNAME}-selected.zip"
-        logger.info(f"Serving ZIP file: {zip_filename}")
         return Response(
             zip_buffer,
             mimetype='application/zip',
             headers={
                 'Content-Disposition': f'attachment; filename={zip_filename}',
-                'Content-Length': str(zip_buffer.getbuffer().nbytes)  # Set Content-Length
+                'Content-Length': str(zip_buffer.getbuffer().nbytes)
             }
         )
 
@@ -539,7 +710,45 @@ def move_items():
 # Route to serve static files
 @app.route('/static/<path:filename>')
 def serve_static(filename):
-    return send_from_directory('static', filename)
+    return send_from_directory(app.static_folder, filename)
+
+def decrypt_file(file_path, passphrase):
+    try:
+        with open(file_path, 'rb') as f:
+            encrypted_data = f.read()
+
+        # Split the encrypted data
+        parts = encrypted_data.split(b':', 2)
+        if len(parts) != 3:
+            logger.error(f"Encrypted file {file_path} format is invalid.")
+            return None
+
+        # Decode the parts from bytes to strings
+        salt_hex = parts[0].decode('utf-8')
+        iv_hex = parts[1].decode('utf-8')
+        ciphertext_b64 = parts[2].decode('utf-8')
+
+        # Convert hex strings to bytes
+        salt = bytes.fromhex(salt_hex)
+        iv = bytes.fromhex(iv_hex)
+        # Decode the base64 ciphertext
+        ciphertext_bytes = base64.b64decode(ciphertext_b64)
+
+        # Derive the key using PBKDF2
+        key = PBKDF2(passphrase, salt, dkLen=32, count=1000)
+
+        # Create a new AES cipher
+        cipher = AES.new(key, AES.MODE_CBC, iv)
+
+        # Decrypt and unpad the data
+        decrypted_padded = cipher.decrypt(ciphertext_bytes)
+        decrypted_data = unpad(decrypted_padded, AES.block_size)
+
+        return decrypted_data
+    except Exception as e:
+        logger.exception(f"Error decrypting file {file_path}: {e}")
+        return None
+
 
 if __name__ == '__main__':
     # Ensure the base backup directory exists
