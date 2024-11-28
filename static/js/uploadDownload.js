@@ -14,6 +14,11 @@ App.setCSRFHeader = function(xhr) {
     }
 };
 
+// Detect iOS devices
+App.isIOS = function() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+};
+
 // Function to perform actions based on user selection
 App.performAction = function(action) {
     if (App.selectedItems.size === 0) {
@@ -62,21 +67,49 @@ App.downloadItems = function(paths) {
     }
 };
 
-// Function to download a single file with progress and cancellation
+// Function to download a single file
 App.downloadSingleFile = function(path) {
+    if (App.isIOS()) {
+        App.downloadViaForm([path], 'download-single');
+    } else {
+        App.downloadSingleFileXHR(path);
+    }
+};
+
+// Function to download multiple items as ZIP
+App.downloadMultipleItems = function(paths) {
+    if (App.isIOS()) {
+        App.downloadViaForm(paths, 'download-multiple');
+    } else {
+        App.downloadMultipleItemsXHR(paths);
+    }
+};
+
+// Function to download all files as ZIP
+App.downloadAll = function() {
+    const allPaths = App.allFiles.map(file => file.path).concat(App.allDirectories);
+    if (App.isIOS()) {
+        App.downloadViaForm(allPaths, 'download-all');
+    } else {
+        App.downloadMultipleItemsXHR(allPaths);
+    }
+};
+
+// AJAX-based download for single file (non-iOS)
+App.downloadSingleFileXHR = function(path) {
     const id = App.generateUniqueId();
     App.addProgressBar(id, 'download', path.split('/').pop());
 
     const xhr = new XMLHttpRequest();
-    App.activeDownloadXHRs[id] = xhr; // Store XHR with unique ID for cancellation
+    App.activeDownloadXHRs[id] = xhr;
     xhr.open('POST', '/download_selected', true);
     xhr.responseType = 'blob';
 
-    // Set the CSRF token and Content-Type in the header
+    // Set headers
     xhr.setRequestHeader('Content-Type', 'application/json');
     App.setCSRFHeader(xhr);
 
-    // Track download progress
+    // Progress tracking
     xhr.onprogress = function(event) {
         if (event.lengthComputable) {
             const percentComplete = ((event.loaded / event.total) * 100).toFixed(2);
@@ -85,12 +118,11 @@ App.downloadSingleFile = function(path) {
     };
 
     xhr.onload = function() {
-        if (xhr.status === 200 || xhr.status === 207) { // 207 for multi-status responses
+        if (xhr.status === 200 || xhr.status === 207) {
             const disposition = xhr.getResponseHeader('Content-Disposition');
             let filename = 'downloaded_file';
             if (disposition && disposition.indexOf('filename=') !== -1) {
-                const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
-                const matches = filenameRegex.exec(disposition);
+                const matches = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
                 if (matches != null && matches[1]) { 
                     filename = matches[1].replace(/['"]/g, '');
                 }
@@ -105,7 +137,7 @@ App.downloadSingleFile = function(path) {
             a.remove();
             window.URL.revokeObjectURL(url);
             alert('Download completed successfully.');
-            App.loadDirectory(App.currentPath); // Refresh the directory view
+            App.loadDirectory(App.currentPath);
         } else {
             try {
                 const response = JSON.parse(xhr.responseText);
@@ -130,25 +162,25 @@ App.downloadSingleFile = function(path) {
         delete App.activeDownloadXHRs[id];
     };
 
-    // Send the selected_paths as JSON in the body
+    // Send the selected_paths as JSON
     xhr.send(JSON.stringify({ selected_paths: [path] }));
 };
 
-// Function to download multiple items as a ZIP with progress and cancellation
-App.downloadMultipleItems = function(paths) {
+// AJAX-based download for multiple items or all files (non-iOS)
+App.downloadMultipleItemsXHR = function(paths) {
     const id = App.generateUniqueId();
     App.addProgressBar(id, 'download', 'Selected Items');
 
     const xhr = new XMLHttpRequest();
-    App.activeDownloadXHRs[id] = xhr; // Store XHR with unique ID for cancellation
+    App.activeDownloadXHRs[id] = xhr;
     xhr.open('POST', '/download_selected', true);
     xhr.responseType = 'blob';
 
-    // Set the CSRF token and Content-Type in the header
+    // Set headers
     xhr.setRequestHeader('Content-Type', 'application/json');
     App.setCSRFHeader(xhr);
 
-    // Track download progress
+    // Progress tracking
     xhr.onprogress = function(event) {
         if (event.lengthComputable) {
             const percentComplete = ((event.loaded / event.total) * 100).toFixed(2);
@@ -157,12 +189,11 @@ App.downloadMultipleItems = function(paths) {
     };
 
     xhr.onload = function() {
-        if (xhr.status === 200 || xhr.status === 207) { // 207 for multi-status responses
+        if (xhr.status === 200 || xhr.status === 207) {
             const disposition = xhr.getResponseHeader('Content-Disposition');
             let filename = 'download.zip';
             if (disposition && disposition.indexOf('filename=') !== -1) {
-                const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
-                const matches = filenameRegex.exec(disposition);
+                const matches = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
                 if (matches != null && matches[1]) { 
                     filename = matches[1].replace(/['"]/g, '');
                 }
@@ -177,7 +208,7 @@ App.downloadMultipleItems = function(paths) {
             a.remove();
             window.URL.revokeObjectURL(url);
             alert('Download completed successfully.');
-            App.loadDirectory(App.currentPath); // Refresh the directory view
+            App.loadDirectory(App.currentPath);
         } else {
             try {
                 const response = JSON.parse(xhr.responseText);
@@ -202,365 +233,47 @@ App.downloadMultipleItems = function(paths) {
         delete App.activeDownloadXHRs[id];
     };
 
-    // Send the selected_paths as JSON in the body
+    // Send the selected_paths as JSON
     xhr.send(JSON.stringify({ selected_paths: paths }));
 };
 
-// Function to download all files as a ZIP with progress (New Implementation)
-App.downloadAll = function() {
-    const id = App.generateUniqueId();
-    App.addProgressBar(id, 'download', 'All Files');
+// Function to handle download via form submission for iOS devices
+App.downloadViaForm = function(paths, formId) {
+    // Create a unique form ID
+    const uniqueFormId = formId || `download-form-${Date.now()}`;
 
-    const xhr = new XMLHttpRequest();
-    App.activeDownloadXHRs[id] = xhr; // Store XHR with unique ID for cancellation
-    xhr.open('GET', '/download_all', true);
-    xhr.responseType = 'blob';
+    // Create form element
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/download_selected';
+    form.target = '_blank'; // Open in a new tab/window
 
-    // Set the CSRF token in the header (if required)
-    App.setCSRFHeader(xhr);
-
-    // Track download progress
-    xhr.onprogress = function(event) {
-        if (event.lengthComputable) {
-            const percentComplete = ((event.loaded / event.total) * 100).toFixed(2);
-            App.updateProgressBar(id, percentComplete);
-        }
-    };
-
-    xhr.onload = function() {
-        if (xhr.status === 200) {
-            const disposition = xhr.getResponseHeader('Content-Disposition');
-            let filename = 'download.zip';
-            if (disposition && disposition.indexOf('filename=') !== -1) {
-                const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
-                const matches = filenameRegex.exec(disposition);
-                if (matches != null && matches[1]) { 
-                    filename = matches[1].replace(/['"]/g, '');
-                }
-            }
-            const blob = xhr.response;
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
-            alert('Download completed successfully.');
-        } else {
-            try {
-                const response = JSON.parse(xhr.responseText);
-                alert(response.error || 'An error occurred during download.');
-            } catch (e) {
-                alert('An error occurred during download.');
-            }
-        }
-        App.removeProgressBar(id);
-        delete App.activeDownloadXHRs[id];
-    };
-
-    xhr.onerror = function() {
-        alert('An error occurred during the download.');
-        App.removeProgressBar(id);
-        delete App.activeDownloadXHRs[id];
-    };
-
-    xhr.onabort = function() {
-        alert('Download has been canceled.');
-        App.removeProgressBar(id);
-        delete App.activeDownloadXHRs[id];
-    };
-
-    xhr.send();
-};
-
-// Function to delete items
-App.deleteItems = function(paths) {
-    if (!confirm(`Are you sure you want to delete ${paths.length} item(s)? This action cannot be undone.`)) {
-        return;
-    }
-
-    App.showLoading(true);
+    // Add CSRF token as a hidden input
     const csrfToken = App.getCSRFToken();
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'X-CSRFToken';
+    csrfInput.value = csrfToken;
+    form.appendChild(csrfInput);
 
-    fetch('/delete', {  // Ensure this endpoint matches the backend route
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': csrfToken  // Include CSRF token in headers
-        },
-        body: JSON.stringify({ path: paths }), // Send array
-    })
-    .then(response => {
-        if (!response.ok) {
-            return response.json().then(data => { throw data; });
-        }
-        return response.json();
-    })
-    .then(data => {
-        if (data.error) {
-            alert(data.error);
-        } else {
-            if (data.errors && data.errors.length > 0) {
-                let message = 'Some items were not deleted:\n';
-                data.errors.forEach(err => {
-                    message += `- ${err.path}: ${err.error}\n`;
-                });
-                alert(message);
-            } else {
-                alert('Items deleted successfully.');
-            }
-            App.selectedItems.clear();
-            App.updateSelectedItemsPanel();
-            App.loadDirectory(App.currentPath); // Refresh the directory view
-        }
-        App.showLoading(false);
-    })
-    .catch(error => {
-        console.error('Error deleting items:', error);
-        alert(error.error || 'An error occurred while deleting the items.');
-        App.showLoading(false);
+    // Add selected_paths as hidden inputs
+    paths.forEach(path => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'selected_paths';
+        input.value = path;
+        form.appendChild(input);
     });
-};
 
-// Function to cancel ongoing upload or download
-App.cancelOperation = function(id, type) {
-    if (type === 'upload' && App.activeUploadXHRs[id]) {
-        App.activeUploadXHRs[id].abort();
-        delete App.activeUploadXHRs[id];
-        alert('Upload canceled.');
-    }
-    if (type === 'download' && App.activeDownloadXHRs[id]) {
-        App.activeDownloadXHRs[id].abort();
-        delete App.activeDownloadXHRs[id];
-        alert('Download canceled.');
-    }
-    App.removeProgressBar(id);
-};
+    // Append form to body
+    document.body.appendChild(form);
 
-// Function to reset all progress bars
-App.resetAllProgressBars = function() {
-    const progressList = document.getElementById('progress-list');
-    progressList.innerHTML = '';
-    App.activeUploadXHRs = {};
-    App.activeDownloadXHRs = {};
-};
+    // Submit the form
+    form.submit();
 
-// Function to upload files with progress tracking and cancellation
-App.uploadFiles = function() {
-    const input = document.getElementById('upload-file-input');
-    const files = input.files;
-    if (files.length === 0) {
-        alert('Please select at least one file to upload.');
-        return;
-    }
+    // Remove the form after submission
+    document.body.removeChild(form);
 
-    const csrfToken = App.getCSRFToken();
-
-    for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const id = App.generateUniqueId();
-        App.addProgressBar(id, 'upload', file.name);
-
-        const formData = new FormData();
-        formData.append('files', file);
-        formData.append('path', App.currentPath);
-
-        const xhr = new XMLHttpRequest();
-        App.activeUploadXHRs[id] = xhr; // Assign to activeUploadXHRs for cancellation
-        xhr.open('POST', '/upload', true);
-
-        // Set the CSRF token in the header
-        App.setCSRFHeader(xhr);
-
-        // Track upload progress
-        xhr.upload.onprogress = function(event) {
-            if (event.lengthComputable) {
-                const percentComplete = ((event.loaded / event.total) * 100).toFixed(2);
-                App.updateProgressBar(id, percentComplete);
-            }
-        };
-
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                const response = JSON.parse(xhr.responseText);
-                if (response.error) {
-                    alert(`Error uploading ${file.name}: ${response.error}`);
-                } else {
-                    alert(`File "${file.name}" uploaded successfully.`);
-                    App.loadDirectory(App.currentPath);
-                }
-            } else {
-                try {
-                    const response = JSON.parse(xhr.responseText);
-                    alert(`Error uploading ${file.name}: ${response.error}`);
-                } catch (e) {
-                    alert(`An error occurred during the upload of "${file.name}".`);
-                }
-            }
-            App.removeProgressBar(id);
-            delete App.activeUploadXHRs[id];
-        };
-
-        xhr.onerror = function() {
-            alert(`An error occurred during the upload of "${file.name}".`);
-            App.removeProgressBar(id);
-            delete App.activeUploadXHRs[id];
-        };
-
-        xhr.onabort = function() {
-            alert(`Upload of "${file.name}" has been canceled.`);
-            App.removeProgressBar(id);
-            delete App.activeUploadXHRs[id];
-        };
-
-        xhr.send(formData);
-    }
-
-    // Reset the input
-    input.value = '';
-};
-
-// Function to upload folders with directory structure, progress tracking, and cancellation
-App.uploadFolders = function() {
-    const input = document.getElementById('upload-folder-input');
-    const files = input.files;
-    if (files.length === 0) {
-        alert('Please select at least one folder to upload.');
-        return;
-    }
-
-    const formData = new FormData();
-    formData.append('path', App.currentPath); // Current directory
-
-    const csrfToken = App.getCSRFToken();
-
-    for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        // Append each file with its relative path
-        formData.append('files', file, file.webkitRelativePath);
-    }
-
-    const id = App.generateUniqueId();
-    App.addProgressBar(id, 'upload', 'Folder Upload');
-
-    const xhr = new XMLHttpRequest();
-    App.activeUploadXHRs[id] = xhr; // Assign to activeUploadXHRs for cancellation
-    xhr.open('POST', '/upload', true);
-
-    // Set the CSRF token in the header
-    App.setCSRFHeader(xhr);
-
-    // Track upload progress
-    xhr.upload.onprogress = function(event) {
-        if (event.lengthComputable) {
-            const percentComplete = ((event.loaded / event.total) * 100).toFixed(2);
-            App.updateProgressBar(id, percentComplete);
-        }
-    };
-
-    xhr.onload = function() {
-        if (xhr.status === 200) {
-            const response = JSON.parse(xhr.responseText);
-            if (response.error) {
-                alert(`Error uploading: ${response.error}`);
-            } else {
-                alert('Folder uploaded successfully.');
-                App.loadDirectory(App.currentPath);
-                App.closeAddFolderModal();
-            }
-        } else {
-            try {
-                const response = JSON.parse(xhr.responseText);
-                alert(`Error uploading: ${response.error}`);
-            } catch (e) {
-                alert('An error occurred during the upload.');
-            }
-        }
-        App.removeProgressBar(id);
-        delete App.activeUploadXHRs[id];
-    };
-
-    xhr.onerror = function() {
-        alert('An error occurred during the upload.');
-        App.removeProgressBar(id);
-        delete App.activeUploadXHRs[id];
-    };
-
-    xhr.onabort = function() {
-        alert('Upload has been canceled.');
-        App.removeProgressBar(id);
-        delete App.activeUploadXHRs[id];
-    };
-
-    xhr.send(formData);
-
-    // Reset the input
-    input.value = '';
-};
-
-// Function to confirm and execute the move action
-App.confirmMove = function() {
-    // Allow empty destinationPath to represent root
-    if (App.selectedDestinationPath === null || App.selectedDestinationPath === undefined) {
-        alert('Please select a destination folder.');
-        return;
-    }
-
-    // Confirm the move action
-    if (!confirm(`Are you sure you want to move ${App.selectedItems.size} item(s) to "${App.selectedDestinationPath || 'Root'}"?`)) {
-        return;
-    }
-
-    App.showLoading(true);
-
-    fetch('/move_items', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': App.getCSRFToken()  // Include CSRF token in headers
-        },
-        body: JSON.stringify({
-            source_paths: Array.from(App.selectedItems),
-            destination_path: App.selectedDestinationPath // Can be empty string for root
-        }),
-    })
-    .then(response => {
-        if (response.status === 207) { // Multi-Status
-            return response.json().then(data => {
-                if (data.moved.length > 0) {
-                    alert(`Successfully moved ${data.moved.length} item(s).`);
-                }
-                if (data.errors.length > 0) {
-                    let errorMsg = 'Some items could not be moved:\n';
-                    data.errors.forEach(err => {
-                        errorMsg += `- ${err.path}: ${err.error}\n`;
-                    });
-                    alert(errorMsg);
-                }
-                App.loadDirectory(App.currentPath); // Refresh the directory view
-                App.closeDestinationModal();
-                App.selectedItems.clear();
-                App.updateSelectedItemsPanel();
-            });
-        } else if (!response.ok) {
-            return response.json().then(data => { throw data; });
-        } else {
-            return response.json().then(data => {
-                alert(data.message);
-                App.loadDirectory(App.currentPath); // Refresh the directory view
-                App.closeDestinationModal();
-                App.selectedItems.clear();
-                App.updateSelectedItemsPanel();
-            });
-        }
-    })
-    .catch(error => {
-        console.error('Error moving items:', error);
-        alert(error.error || 'An error occurred while moving the items.');
-    })
-    .finally(() => {
-        App.showLoading(false);
-    });
+    // Notify user for iOS devices
+    alert('Your download should begin shortly. Please check your downloads or the new tab.');
 };

@@ -431,36 +431,29 @@ def download_all():
 @login_required
 def download_selected():
     try:
-        if not request.is_json:
-            logger.error("Request content type is not JSON.")
-            return jsonify({'error': 'Invalid content type. JSON expected.'}), 400
-
-        data = request.get_json()
-        if not data:
-            logger.error("No JSON payload received.")
-            return jsonify({'error': 'Invalid or missing JSON payload.'}), 400
-
-        selected_paths = data.get('selected_paths', [])
-
+        # Determine content type
+        if request.is_json:
+            selected_paths = request.get_json().get('selected_paths', [])
+        else:
+            # Handle form data
+            selected_paths = request.form.getlist('selected_paths')
+    
+        app.logger.debug(f"Received selected_paths: {selected_paths}")
+    
         if not selected_paths:
-            logger.error("No files or directories selected for download.")
+            app.logger.error("No files or directories selected for download.")
             return jsonify({'error': 'No files or directories selected for download.'}), 400
-
-        if not isinstance(selected_paths, list):
-            selected_paths = [selected_paths]
-
+    
         username = current_user.id
         absolute_paths = [secure_path(path) for path in selected_paths]
-
-        logger.info(f"Creating ZIP for selected items: {selected_paths}")
-
-        # Handle single item download
+    
+        app.logger.info(f"Creating ZIP for selected items: {selected_paths}")
+    
+        # Single item download
         if len(absolute_paths) == 1:
             selected_path = absolute_paths[0]
-            relative_path = os.path.relpath(selected_path, VOLUME).replace("\\", "/")
-
             if os.path.isfile(selected_path):
-                logger.info(f"Serving single file: {selected_path}")
+                app.logger.info(f"Serving single file: {selected_path}")
                 return send_file(
                     selected_path,
                     as_attachment=True,
@@ -472,12 +465,12 @@ def download_selected():
                     for root, dirs, files in os.walk(selected_path):
                         for file in files:
                             file_path = os.path.join(root, file)
-                            relative_file_path = os.path.relpath(file_path, VOLUME).replace("\\", "/")
-                            zip_file.write(file_path, relative_file_path)
-                            logger.debug(f"Added to ZIP: {relative_file_path}")
+                            relative_path = os.path.relpath(file_path, VOLUME).replace("\\", "/")
+                            zip_file.write(file_path, relative_path)
+                            app.logger.debug(f"Added to ZIP: {relative_path}")
                 zip_buffer.seek(0)
                 zip_filename = f"{username}-{os.path.basename(selected_path)}.zip"
-                logger.info(f"Serving ZIP file: {zip_filename}")
+                app.logger.info(f"Serving ZIP file: {zip_filename}")
                 return Response(
                     zip_buffer,
                     mimetype='application/zip',
@@ -487,28 +480,28 @@ def download_selected():
                     }
                 )
             else:
-                logger.error(f"Selected path is neither a file nor a directory: {selected_path}")
+                app.logger.error(f"Selected path is neither a file nor a directory: {selected_path}")
                 return jsonify({'error': "Selected path is neither a file nor a directory."}), 400
-
-        # Handle multiple items download
+    
+        # Multiple items download as ZIP
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
             for selected_path in absolute_paths:
                 if os.path.isfile(selected_path):
                     relative_path = os.path.relpath(selected_path, VOLUME).replace("\\", "/")
                     zip_file.write(selected_path, relative_path)
-                    logger.debug(f"Added to ZIP: {relative_path}")
+                    app.logger.debug(f"Added to ZIP: {relative_path}")
                 elif os.path.isdir(selected_path):
                     for root, dirs, files in os.walk(selected_path):
                         for file in files:
                             file_path = os.path.join(root, file)
                             relative_path = os.path.relpath(file_path, VOLUME).replace("\\", "/")
                             zip_file.write(file_path, relative_path)
-                            logger.debug(f"Added to ZIP: {relative_path}")
-
+                            app.logger.debug(f"Added to ZIP: {relative_path}")
+    
         zip_buffer.seek(0)
         zip_filename = f"{username}-selected.zip"
-        logger.info(f"Serving ZIP file: {zip_filename}")
+        app.logger.info(f"Serving ZIP file: {zip_filename}")
         return Response(
             zip_buffer,
             mimetype='application/zip',
@@ -517,9 +510,9 @@ def download_selected():
                 'Content-Length': str(zip_buffer.getbuffer().nbytes)
             }
         )
-
+    
     except Exception as e:
-        logger.exception(f"Error creating ZIP for selected items: {e}")
+        app.logger.exception(f"Error creating ZIP for selected items: {e}")
         return jsonify({'error': 'An error occurred while creating ZIP.', 'message': str(e)}), 500
 
 @app.route('/api/get_file_content', methods=['GET'])
