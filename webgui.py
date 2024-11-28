@@ -31,7 +31,7 @@ load_dotenv()
 
 # Configuration Class
 class Config:
-    SECRET_KEY = os.getenv("SECRET_KEY", "your_default_secret_key")
+    SECRET_KEY = os.getenv("SECRET_KEY")
     MAX_CONTENT_LENGTH = 5 * 1024 * 1024 * 1024  # 5 GB
     CORS_ORIGINS = os.getenv("CORS_ORIGINS")  # Adjust as needed
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
