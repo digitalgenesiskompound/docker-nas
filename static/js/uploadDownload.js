@@ -252,7 +252,7 @@ App.downloadViaForm = function(paths, formId) {
     const csrfToken = App.getCSRFToken();
     const csrfInput = document.createElement('input');
     csrfInput.type = 'hidden';
-    csrfInput.name = 'X-CSRFToken';
+    csrfInput.name = 'csrf_token'; // Changed from 'X-CSRFToken' to 'csrf_token'
     csrfInput.value = csrfToken;
     form.appendChild(csrfInput);
 
