@@ -1,46 +1,76 @@
-import logging
-from flask import Flask, send_file, send_from_directory, abort, render_template, request, Response, jsonify, redirect, url_for, flash
-from flask_cors import CORS
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from flask_wtf.csrf import CSRFProtect
-from auth.models import user_exists, create_user, get_user
-from auth.forms import SetupForm, LoginForm
-from werkzeug.utils import secure_filename
 import os
-import zipfile
 import io
+import zipfile
 import pathlib
-import json
 import shutil
+import logging
+from logging.handlers import RotatingFileHandler
+
+from flask import (
+    Flask, send_file, send_from_directory, abort, render_template,
+    request, Response, jsonify, redirect, url_for, flash
+)
+from flask_cors import CORS
+from flask_login import (
+    LoginManager, UserMixin, login_user,
+    login_required, logout_user, current_user
+)
+from flask_wtf.csrf import CSRFProtect
+from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
+
+from auth.models import user_exists, create_user, get_user
+from auth.forms import SetupForm, LoginForm
 from auth.utils import check_password
 
 from config import VOLUME
 
-app = Flask(__name__, static_folder='static', template_folder='templates')
-CORS(app, resources={r"/*": {"origins": "*"}})  # Adjust origins as needed for security
-
-# Apply ProxyFix to handle headers from Nginx
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
+# Load environment variables
 load_dotenv()
 
-# Set maximum file size for uploads (5 GB)
-app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024 * 1024  # 5 GB limit per file
+# Configuration Class
+class Config:
+    SECRET_KEY = os.getenv("SECRET_KEY", "your_default_secret_key")
+    MAX_CONTENT_LENGTH = 5 * 1024 * 1024 * 1024  # 5 GB
+    CORS_ORIGINS = os.getenv("CORS_ORIGINS")  # Adjust as needed
+    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+    LOG_FILE = os.getenv("LOG_FILE", "app.log")
 
-# Load SECRET_KEY from credentials.json if user exists, else use default (will be overwritten during setup)
-if user_exists():
-    user = get_user()
-    app.config['SECRET_KEY'] = user.get('secret_key', os.getenv("SECRET_KEY", "your_default_secret_key"))
-else:
-    app.config['SECRET_KEY'] = os.getenv("SECRET_KEY", "your_default_secret_key")
+# Initialize Flask App
+app = Flask(__name__, static_folder='static', template_folder='templates')
+app.config.from_object(Config)
 
-# Initialize CSRF protection
+# Parse CORS_ORIGINS into a list
+cors_origins = [origin.strip() for origin in app.config['CORS_ORIGINS'].split(',')]
+
+# Initialize CORS
+CORS(app, resources={
+    r"/*": {
+        "origins": cors_origins,
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "X-CSRFToken"],
+        "expose_headers": ["Content-Disposition"],
+        "supports_credentials": True
+    }
+})
+
+# Apply ProxyFix to handle headers from reverse proxies like Nginx
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+# Configure Logging
+handler = RotatingFileHandler(app.config['LOG_FILE'], maxBytes=10000000, backupCount=5)
+formatter = logging.Formatter(
+    '[%(asctime)s] %(levelname)s in %(module)s: %(message)s'
+)
+handler.setFormatter(formatter)
+handler.setLevel(app.config['LOG_LEVEL'])
+app.logger.addHandler(handler)
+app.logger.setLevel(app.config['LOG_LEVEL'])
+
+logger = app.logger
+
+# Initialize CSRF Protection
 csrf = CSRFProtect(app)
 
 # Initialize Flask-Login
@@ -48,10 +78,12 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
+# User Class
 class User(UserMixin):
-    def __init__(self, id):
-        self.id = id
+    def __init__(self, username):
+        self.id = username
 
+# User Loader
 @login_manager.user_loader
 def load_user(user_id):
     user = get_user()
@@ -59,59 +91,7 @@ def load_user(user_id):
         return User(user['username'])
     return None
 
-# Route for initial setup
-@app.route('/setup', methods=['GET', 'POST'])
-def setup():
-    if user_exists():
-        return redirect(url_for('login'))
-    
-    form = SetupForm()
-    if form.validate_on_submit():
-        username = form.username.data
-        password = form.password.data
-        create_user(username, password)
-        flash('Setup complete. Please log in.', 'success')
-        return redirect(url_for('login'))
-    
-    return render_template('setup.html', form=form)
-
-# Route for login
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if not user_exists():
-        return redirect(url_for('setup'))
-    
-    form = LoginForm()
-    if form.validate_on_submit():
-        user = get_user()
-        if user and form.username.data == user['username'] and check_password(form.password.data, user['password']):
-            user_obj = User(user['username'])
-            login_user(user_obj)
-            flash('Logged in successfully.', 'success')
-            return redirect(url_for('index'))
-        else:
-            flash('Invalid username or password.', 'danger')
-    
-    return render_template('login.html', form=form)
-
-# Route for logout
-@app.route('/logout')
-@login_required
-def logout():
-    logout_user()
-    flash('Logged out successfully.', 'success')
-    return redirect(url_for('login'))
-
-# Protect all routes below with login_required
-@app.before_request
-def require_login():
-    allowed_routes = ['login', 'setup', 'static']
-    if user_exists():
-        if request.endpoint == 'setup':
-            return redirect(url_for('login'))
-    if request.endpoint not in allowed_routes and not current_user.is_authenticated:
-        return redirect(url_for('login'))
-
+# Utility Functions
 def secure_path(path):
     """
     Ensure the path is secure and within VOLUME.
@@ -129,6 +109,82 @@ def secure_relative_path(relative_path):
     parts = pathlib.PurePosixPath(relative_path).parts
     safe_parts = [secure_filename(part) for part in parts]
     return os.path.join(*safe_parts)
+
+# Error Handlers
+@app.errorhandler(400)
+def bad_request(error):
+    return jsonify({'error': 'Bad Request'}), 400
+
+@app.errorhandler(403)
+def forbidden(error):
+    return jsonify({'error': 'Forbidden'}), 403
+
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({'error': 'Not Found'}), 404
+
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    return jsonify({'error': 'File Too Large'}), 413
+
+@app.errorhandler(500)
+def internal_server_error(error):
+    # For debugging purposes, include the error message
+    return jsonify({'error': 'Internal Server Error', 'message': str(error)}), 500
+
+# Before Request: Ensure Authentication
+@app.before_request
+def require_login():
+    allowed_routes = {'login', 'setup', 'static'}
+    if user_exists():
+        if request.endpoint == 'setup':
+            return redirect(url_for('login'))
+    if request.endpoint not in allowed_routes and not current_user.is_authenticated:
+        return redirect(url_for('login'))
+
+# Routes
+
+@app.route('/setup', methods=['GET', 'POST'])
+def setup():
+    if user_exists():
+        return redirect(url_for('login'))
+    
+    form = SetupForm()
+    if form.validate_on_submit():
+        username = form.username.data
+        password = form.password.data
+        create_user(username, password)
+        flash('Setup complete. Please log in.', 'success')
+        return redirect(url_for('login'))
+    
+    return render_template('setup.html', form=form)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if not user_exists():
+        return redirect(url_for('setup'))
+    
+    form = LoginForm()
+    if form.validate_on_submit():
+        user = get_user()
+        if (user and 
+            form.username.data == user['username'] and 
+            check_password(form.password.data, user['password'])):
+            user_obj = User(user['username'])
+            login_user(user_obj)
+            flash('Logged in successfully.', 'success')
+            return redirect(url_for('index'))
+        else:
+            flash('Invalid username or password.', 'danger')
+    
+    return render_template('login.html', form=form)
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash('Logged out successfully.', 'success')
+    return redirect(url_for('login'))
 
 @app.route('/')
 @login_required
@@ -157,24 +213,21 @@ def list_directory():
                 files.append({
                     'name': item,
                     'size': stat.st_size,
-                    'lastModified': int(stat.st_mtime),  # Unix timestamp in seconds
-                    'path': os.path.relpath(item_path, VOLUME).replace("\\", "/")  # Ensure consistent path separators
+                    'lastModified': int(stat.st_mtime),
+                    'path': os.path.relpath(item_path, VOLUME).replace("\\", "/")
                 })
 
         directories.sort()
         files.sort(key=lambda x: x['name'].lower())
 
         # Build breadcrumb data
-        breadcrumb = []
+        breadcrumb = [{'name': 'Root', 'path': ''}]
         if path:
             parts = path.strip('/').split('/')
             accumulated_path = ''
-            breadcrumb.append({'name': 'Root', 'path': ''})
             for part in parts:
                 accumulated_path = os.path.join(accumulated_path, part)
                 breadcrumb.append({'name': part, 'path': accumulated_path.replace("\\", "/")})
-        else:
-            breadcrumb.append({'name': 'Root', 'path': ''})
 
         return jsonify({
             'directories': directories,
@@ -184,7 +237,7 @@ def list_directory():
 
     except Exception as e:
         logger.exception(f"Error listing directory {path}: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'An error occurred while listing the directory.', 'message': str(e)}), 500
 
 @app.route('/api/search', methods=['GET'])
 @login_required
@@ -198,49 +251,49 @@ def search():
     matched_directories = []
     matched_files = []
 
-    for root, dirs, files in os.walk(VOLUME):
-        # Check directories
-        for dir in dirs:
-            if query in dir.lower():
-                relative_path = os.path.relpath(os.path.join(root, dir), VOLUME).replace("\\", "/")
-                matched_directories.append(relative_path)
+    try:
+        for root, dirs, files in os.walk(VOLUME):
+            # Check directories
+            for dir in dirs:
+                if query in dir.lower():
+                    relative_path = os.path.relpath(os.path.join(root, dir), VOLUME).replace("\\", "/")
+                    matched_directories.append(relative_path)
 
-        # Check files
-        for file in files:
-            if query in file.lower():
-                file_path = os.path.join(root, file)
-                relative_path = os.path.relpath(file_path, VOLUME).replace("\\", "/")
-                stat = os.stat(file_path)
-                matched_files.append({
-                    'name': file,
-                    'size': stat.st_size,
-                    'lastModified': int(stat.st_mtime),  # Unix timestamp in seconds
-                    'path': relative_path
-                })
+            # Check files
+            for file in files:
+                if query in file.lower():
+                    file_path = os.path.join(root, file)
+                    relative_path = os.path.relpath(file_path, VOLUME).replace("\\", "/")
+                    stat = os.stat(file_path)
+                    matched_files.append({
+                        'name': file,
+                        'size': stat.st_size,
+                        'lastModified': int(stat.st_mtime),
+                        'path': relative_path
+                    })
 
-    # Build breadcrumb for search results
-    breadcrumb = [{'name': 'Root', 'path': ''}, {'name': f"Search Results for '{query}'", 'path': ''}]
+        # Build breadcrumb for search results
+        breadcrumb = [{'name': 'Root', 'path': ''}, {'name': f"Search Results for '{query}'", 'path': ''}]
 
-    logger.info(f"Search found {len(matched_directories)} directories and {len(matched_files)} files.")
-    return jsonify({
-        'directories': matched_directories,
-        'files': matched_files,
-        'breadcrumb': breadcrumb
-    })
+        logger.info(f"Search found {len(matched_directories)} directories and {len(matched_files)} files.")
+        return jsonify({
+            'directories': matched_directories,
+            'files': matched_files,
+            'breadcrumb': breadcrumb
+        })
+    except Exception as e:
+        logger.exception(f"Error during search: {e}")
+        return jsonify({'error': 'An error occurred during the search.', 'message': str(e)}), 500
 
 @app.route('/upload', methods=['POST'])
 @login_required
-@csrf.exempt
 def upload_files():
     try:
-        # Get the target path from form data
         path = request.form.get('path', '').strip()
-
         target_dir = secure_path(path)
 
         logger.info(f"Uploading files to: {path}")
 
-        # Ensure the target directory exists
         if not os.path.exists(target_dir):
             logger.error(f"Target directory does not exist: {target_dir}")
             return jsonify({'error': 'Target directory does not exist.'}), 400
@@ -251,9 +304,12 @@ def upload_files():
             return jsonify({'error': 'No files uploaded.'}), 400
 
         for file in uploaded_files:
-            # Secure the relative path
-            relative_path = file.filename
-            if relative_path.startswith('/') or '..' in relative_path:
+            if file.filename == '':
+                logger.warning("Empty filename detected.")
+                continue  # Skip files with empty filenames
+
+            relative_path = secure_relative_path(file.filename)
+            if os.path.isabs(relative_path) or '..' in relative_path:
                 logger.error(f"Invalid file path: {relative_path}")
                 return jsonify({'error': 'Invalid file path.'}), 400
 
@@ -265,7 +321,7 @@ def upload_files():
             file_path = os.path.join(final_dir, filename)
             if os.path.exists(file_path):
                 logger.error(f'File "{file_path}" already exists.')
-                return jsonify({'error': f'File "{file_path}" already exists.'}), 400
+                return jsonify({'error': f'File "{filename}" already exists in the target directory.'}), 400
 
             file.save(file_path)
             logger.info(f"Uploaded file: {file_path}")
@@ -274,14 +330,17 @@ def upload_files():
 
     except Exception as e:
         logger.exception(f"Error uploading files to {path}: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'An error occurred while uploading files.', 'message': str(e)}), 500
 
 @app.route('/delete', methods=['POST'])
 @login_required
-@csrf.exempt
 def delete_item():
     try:
         data = request.get_json()
+        if not data:
+            logger.error("No JSON payload received.")
+            return jsonify({'error': 'Invalid or missing JSON payload.'}), 400
+
         paths = data.get('path', [])
         if not paths:
             logger.error("No paths provided for deletion.")
@@ -307,7 +366,7 @@ def delete_item():
                     os.remove(destination_path)
                     logger.info(f"Deleted file: {destination_path}")
                 elif os.path.isdir(destination_path):
-                    shutil.rmtree(destination_path)  # Removes directory and all its contents
+                    shutil.rmtree(destination_path)
                     logger.info(f"Deleted directory and its contents: {destination_path}")
                 else:
                     logger.error(f"Selected path is neither a file nor a directory: {destination_path}")
@@ -316,16 +375,16 @@ def delete_item():
                 deleted.append(path)
             except Exception as e:
                 logger.exception(f"Error deleting item {path}: {e}")
-                errors.append({'path': path, 'error': str(e)})
+                errors.append({'path': path, 'error': 'Failed to delete item.'})
 
         if errors:
-            return jsonify({'message': 'Some items were not deleted.', 'deleted': deleted, 'errors': errors}), 207  # Multi-Status
+            return jsonify({'message': 'Some items were not deleted.', 'deleted': deleted, 'errors': errors}), 207
         else:
             return jsonify({'message': 'All items deleted successfully.', 'deleted': deleted}), 200
 
     except Exception as e:
         logger.exception(f"Error deleting items: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'An error occurred while deleting items.', 'message': str(e)}), 500
 
 @app.route('/download_all', methods=['GET'])
 @login_required
@@ -334,32 +393,25 @@ def download_all():
         if not os.path.exists(VOLUME):
             logger.error("Backup directory not found.")
             return jsonify({'error': 'Backup directory not found.'}), 500
-        
-        username = current_user.id
 
+        username = current_user.id
         logger.info("Creating ZIP for all backups.")
 
-        # Create a zip file in-memory
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
             for root, dirs, files in os.walk(VOLUME):
-                # Add directories (including empty ones)
                 for dir in dirs:
                     dir_path = os.path.join(root, dir)
                     relative_dir_path = os.path.relpath(dir_path, VOLUME).replace("\\", "/") + '/'
-                    zip_file.writestr(relative_dir_path, '')  # Add directory entry
+                    zip_file.writestr(relative_dir_path, '')
 
-                # Add files
                 for file in files:
                     file_path = os.path.join(root, file)
                     relative_file_path = os.path.relpath(file_path, VOLUME).replace("\\", "/")
                     zip_file.write(file_path, relative_file_path)
                     logger.debug(f"Added to ZIP: {relative_file_path}")
 
-        # Set the pointer to the start of the BytesIO buffer
         zip_buffer.seek(0)
-
-        # Serve the zip file as a downloadable response with a custom name
         zip_filename = f"{username}-all.zip"
         logger.info(f"Serving ZIP file: {zip_filename}")
         return Response(
@@ -367,40 +419,47 @@ def download_all():
             mimetype='application/zip',
             headers={
                 'Content-Disposition': f'attachment; filename={zip_filename}',
-                'Content-Length': str(zip_buffer.getbuffer().nbytes)  # Set Content-Length
+                'Content-Length': str(zip_buffer.getbuffer().nbytes)
             }
         )
 
     except Exception as e:
         logger.exception(f"Error creating ZIP: {e}")
-        return jsonify({'error': f"An error occurred while creating ZIP: {str(e)}"}), 500
+        return jsonify({'error': 'An error occurred while creating ZIP.', 'message': str(e)}), 500
 
 @app.route('/download_selected', methods=['POST'])
 @login_required
-@csrf.exempt
 def download_selected():
     try:
-        # Get the list of selected paths from the JSON payload
-        selected_paths = request.json.get('selected_paths', [])
+        if not request.is_json:
+            logger.error("Request content type is not JSON.")
+            return jsonify({'error': 'Invalid content type. JSON expected.'}), 400
+
+        data = request.get_json()
+        if not data:
+            logger.error("No JSON payload received.")
+            return jsonify({'error': 'Invalid or missing JSON payload.'}), 400
+
+        selected_paths = data.get('selected_paths', [])
 
         if not selected_paths:
             logger.error("No files or directories selected for download.")
             return jsonify({'error': 'No files or directories selected for download.'}), 400
-        
-        username = current_user.id
 
-        # Secure and validate all selected paths
+        if not isinstance(selected_paths, list):
+            selected_paths = [selected_paths]
+
+        username = current_user.id
         absolute_paths = [secure_path(path) for path in selected_paths]
 
         logger.info(f"Creating ZIP for selected items: {selected_paths}")
 
-        # If only one file or directory is selected, handle accordingly
+        # Handle single item download
         if len(absolute_paths) == 1:
             selected_path = absolute_paths[0]
             relative_path = os.path.relpath(selected_path, VOLUME).replace("\\", "/")
 
             if os.path.isfile(selected_path):
-                # Serve the single file
                 logger.info(f"Serving single file: {selected_path}")
                 return send_file(
                     selected_path,
@@ -408,7 +467,6 @@ def download_selected():
                     download_name=os.path.basename(selected_path)
                 )
             elif os.path.isdir(selected_path):
-                # Create a zip of the selected directory
                 zip_buffer = io.BytesIO()
                 with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                     for root, dirs, files in os.walk(selected_path):
@@ -425,24 +483,22 @@ def download_selected():
                     mimetype='application/zip',
                     headers={
                         'Content-Disposition': f'attachment; filename={zip_filename}',
-                        'Content-Length': str(zip_buffer.getbuffer().nbytes)  # Set Content-Length
+                        'Content-Length': str(zip_buffer.getbuffer().nbytes)
                     }
                 )
             else:
                 logger.error(f"Selected path is neither a file nor a directory: {selected_path}")
                 return jsonify({'error': "Selected path is neither a file nor a directory."}), 400
 
-        # For multiple selections, create a zip containing all selected files and directories
+        # Handle multiple items download
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
             for selected_path in absolute_paths:
                 if os.path.isfile(selected_path):
-                    # Add the file to the zip
                     relative_path = os.path.relpath(selected_path, VOLUME).replace("\\", "/")
                     zip_file.write(selected_path, relative_path)
                     logger.debug(f"Added to ZIP: {relative_path}")
                 elif os.path.isdir(selected_path):
-                    # Add the directory and its contents to the zip
                     for root, dirs, files in os.walk(selected_path):
                         for file in files:
                             file_path = os.path.join(root, file)
@@ -450,10 +506,7 @@ def download_selected():
                             zip_file.write(file_path, relative_path)
                             logger.debug(f"Added to ZIP: {relative_path}")
 
-        # Set the pointer to the start of the BytesIO buffer
         zip_buffer.seek(0)
-
-        # Serve the zip file as a downloadable response with a custom name
         zip_filename = f"{username}-selected.zip"
         logger.info(f"Serving ZIP file: {zip_filename}")
         return Response(
@@ -461,13 +514,13 @@ def download_selected():
             mimetype='application/zip',
             headers={
                 'Content-Disposition': f'attachment; filename={zip_filename}',
-                'Content-Length': str(zip_buffer.getbuffer().nbytes)  # Set Content-Length
+                'Content-Length': str(zip_buffer.getbuffer().nbytes)
             }
         )
 
     except Exception as e:
         logger.exception(f"Error creating ZIP for selected items: {e}")
-        return jsonify({'error': f"An error occurred while creating ZIP: {str(e)}"}), 500
+        return jsonify({'error': 'An error occurred while creating ZIP.', 'message': str(e)}), 500
 
 @app.route('/api/get_file_content', methods=['GET'])
 @login_required
@@ -487,17 +540,27 @@ def get_file_content():
 
         return jsonify({'content': content}), 200
 
+    except UnicodeDecodeError:
+        logger.error(f"Encoding error when reading file: {path}")
+        return jsonify({'error': 'File encoding not supported.'}), 400
     except Exception as e:
         logger.exception(f"Error fetching file content for {path}: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'An error occurred while fetching file content.', 'message': str(e)}), 500
 
 @app.route('/api/save_file_content', methods=['POST'])
 @login_required
-@csrf.exempt
 def save_file_content():
     try:
+        if not request.is_json:
+            logger.error("Request content type is not JSON.")
+            return jsonify({'error': 'Invalid content type. JSON expected.'}), 400
+
         data = request.get_json()
-        path = data.get('path', '')
+        if not data:
+            logger.error("No JSON payload received.")
+            return jsonify({'error': 'Invalid or missing JSON payload.'}), 400
+
+        path = data.get('path', '').strip()
         content = data.get('content', '')
 
         if not path:
@@ -508,7 +571,6 @@ def save_file_content():
         if not os.path.isfile(secure_file_path):
             return jsonify({'error': 'The specified path is not a file.'}), 400
 
-        # Write the new content to the file
         with open(secure_file_path, 'w', encoding='utf-8') as f:
             f.write(content)
 
@@ -517,29 +579,27 @@ def save_file_content():
 
     except Exception as e:
         logger.exception(f"Error saving file content for {path}: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'An error occurred while saving file content.', 'message': str(e)}), 500
 
 @app.route('/create_folder', methods=['POST'])
 @login_required
-@csrf.exempt
 def create_folder():
     try:
-        # Validate incoming JSON
+        if not request.is_json:
+            logger.error("Request content type is not JSON.")
+            return jsonify({'error': 'Invalid content type. JSON expected.'}), 400
+
         data = request.get_json()
         if not data:
-            return jsonify({'error': 'Invalid JSON data.'}), 400
+            return jsonify({'error': 'Invalid or missing JSON payload.'}), 400
 
-        # Extract and validate the fields
         path = data.get('path', '').strip()
         folder_name = data.get('folder_name', '').strip()
 
         if not folder_name:
             return jsonify({'error': 'Folder name cannot be empty.'}), 400
 
-        # Secure the target directory
         target_dir = secure_path(path)
-
-        # Full path for the new folder
         new_folder_path = os.path.join(target_dir, secure_filename(folder_name))
 
         if os.path.exists(new_folder_path):
@@ -552,73 +612,66 @@ def create_folder():
 
     except Exception as e:
         logger.exception(f"Error creating folder in {path}: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'An error occurred while creating the folder.', 'message': str(e)}), 500
 
 @app.route('/create_file', methods=['POST'])
 @login_required
-@csrf.exempt
 def create_file():
     try:
-        # Validate incoming JSON
+        if not request.is_json:
+            logger.error("Request content type is not JSON.")
+            return jsonify({'error': 'Invalid content type. JSON expected.'}), 400
+
         data = request.get_json()
         if not data:
-            return jsonify({'error': 'Invalid JSON data.'}), 400
+            return jsonify({'error': 'Invalid or missing JSON payload.'}), 400
 
-        # Extract and validate the fields
         path = data.get('path', '').strip()
         file_name = data.get('file_name', '').strip()
 
         if not file_name:
             return jsonify({'error': 'File name cannot be empty.'}), 400
 
-        # Secure the target directory
         target_dir = secure_path(path)
-
-        # Full path for the new file
         new_file_path = os.path.join(target_dir, secure_filename(file_name))
 
         if os.path.exists(new_file_path):
             return jsonify({'error': 'File already exists.'}), 400
 
-        # Create an empty file
-        with open(new_file_path, 'w') as f:
-            pass
+        with open(new_file_path, 'w', encoding='utf-8') as f:
+            pass  # Create an empty file
 
         logger.info(f"Created new file: {new_file_path}")
-
         return jsonify({'message': 'File created successfully.'}), 200
 
     except Exception as e:
         logger.exception(f"Error creating file in {path}: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'An error occurred while creating the file.', 'message': str(e)}), 500
 
 @app.route('/move_items', methods=['POST'])
 @login_required
-@csrf.exempt
 def move_items():
     try:
+        if not request.is_json:
+            logger.error("Request content type is not JSON.")
+            return jsonify({'error': 'Invalid content type. JSON expected.'}), 400
+
         data = request.get_json()
         logger.debug(f"Received move_items data: {data}")
         source_paths = data.get('source_paths', [])
         destination_path = data.get('destination_path', '')
-        logger.debug(f"Source paths: {source_paths}, Destination path: {destination_path}")
 
         if not source_paths:
             return jsonify({'error': 'No source paths provided.'}), 400
 
-        # Handle empty destination_path (root directory)
-        if destination_path == '':
-            secure_destination_path = VOLUME  # Use the root volume directory
-        else:
-            secure_destination_path = secure_path(destination_path)
+        if not isinstance(source_paths, list):
+            source_paths = [source_paths]
 
-        logger.debug(f"Secure destination path: {secure_destination_path}")
+        secure_destination_path = VOLUME if destination_path == '' else secure_path(destination_path)
 
-        # Ensure the target directory exists
         if not os.path.exists(secure_destination_path):
             return jsonify({'error': 'Target directory does not exist.'}), 400
 
-        # Process each source path
         moved = []
         errors = []
 
@@ -627,12 +680,10 @@ def move_items():
             item_name = os.path.basename(secure_source_path)
             destination = os.path.join(secure_destination_path, item_name)
 
-            # Prevent moving an item into itself or its subdirectories
             if os.path.abspath(destination).startswith(os.path.abspath(secure_source_path)):
                 errors.append({'path': source_path, 'error': 'Cannot move a directory into itself or its subdirectory.'})
                 continue
 
-            # Check if destination already exists
             if os.path.exists(destination):
                 errors.append({'path': source_path, 'error': 'Destination already exists.'})
                 continue
@@ -643,24 +694,28 @@ def move_items():
                 moved.append(source_path)
             except Exception as e:
                 logger.exception(f"Error moving {source_path} to {destination}: {e}")
-                errors.append({'path': source_path, 'error': str(e)})
+                errors.append({'path': source_path, 'error': 'Failed to move item.'})
 
         if errors:
-            return jsonify({'message': 'Some items were not moved.', 'moved': moved, 'errors': errors}), 207  # Multi-Status
+            return jsonify({'message': 'Some items were not moved.', 'moved': moved, 'errors': errors}), 207
         else:
             return jsonify({'message': 'All items moved successfully.', 'moved': moved}), 200
 
     except Exception as e:
         logger.exception(f"Error moving items: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'An error occurred while moving items.', 'message': str(e)}), 500
 
 @app.route('/static/<path:filename>')
 @login_required
-def serve_static(filename):
+def serve_static_file(filename):
     return send_from_directory(app.static_folder, filename)
 
+# Main Execution
 if __name__ == '__main__':
-    # Ensure the base directory exists
-    if not os.path.exists(VOLUME):
-        os.makedirs(VOLUME)
-    app.run(host='0.0.0.0', port=5000)
+    try:
+        if not os.path.exists(VOLUME):
+            os.makedirs(VOLUME)
+            logger.info(f"Created base directory: {VOLUME}")
+        app.run(host='0.0.0.0', port=5000)
+    except Exception as e:
+        logger.exception(f"Failed to start the application: {e}")

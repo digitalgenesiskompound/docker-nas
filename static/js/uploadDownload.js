@@ -1,5 +1,19 @@
 // uploadDownload.js
 
+// Initialize CSRF Token
+App.getCSRFToken = function() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : '';
+};
+
+// Set CSRF Token in XHR Headers
+App.setCSRFHeader = function(xhr) {
+    const csrfToken = App.getCSRFToken();
+    if (csrfToken) {
+        xhr.setRequestHeader('X-CSRFToken', csrfToken);
+    }
+};
+
 // Function to perform actions based on user selection
 App.performAction = function(action) {
     if (App.selectedItems.size === 0) {
@@ -58,8 +72,9 @@ App.downloadSingleFile = function(path) {
     xhr.open('POST', '/download_selected', true);
     xhr.responseType = 'blob';
 
-    // Set the request header to indicate JSON payload
+    // Set the CSRF token and Content-Type in the header
     xhr.setRequestHeader('Content-Type', 'application/json');
+    App.setCSRFHeader(xhr);
 
     // Track download progress
     xhr.onprogress = function(event) {
@@ -129,8 +144,9 @@ App.downloadMultipleItems = function(paths) {
     xhr.open('POST', '/download_selected', true);
     xhr.responseType = 'blob';
 
-    // Set the request header to indicate JSON payload
+    // Set the CSRF token and Content-Type in the header
     xhr.setRequestHeader('Content-Type', 'application/json');
+    App.setCSRFHeader(xhr);
 
     // Track download progress
     xhr.onprogress = function(event) {
@@ -190,52 +206,6 @@ App.downloadMultipleItems = function(paths) {
     xhr.send(JSON.stringify({ selected_paths: paths }));
 };
 
-// Function to delete items
-App.deleteItems = function(paths) {
-    if (!confirm(`Are you sure you want to delete ${paths.length} item(s)? This action cannot be undone.`)) {
-        return;
-    }
-
-    App.showLoading(true);
-    fetch('/delete', {  // Ensure this endpoint matches the backend route
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ path: paths }), // Send array
-    })
-    .then(response => {
-        if (!response.ok) {
-            return response.json().then(data => { throw data; });
-        }
-        return response.json();
-    })
-    .then(data => {
-        if (data.error) {
-            alert(data.error);
-        } else {
-            if (data.errors && data.errors.length > 0) {
-                let message = 'Some items were not deleted:\n';
-                data.errors.forEach(err => {
-                    message += `- ${err.path}: ${err.error}\n`;
-                });
-                alert(message);
-            } else {
-                alert('Items deleted successfully.');
-            }
-            App.selectedItems.clear();
-            App.updateSelectedItemsPanel();
-            App.loadDirectory(App.currentPath); // Refresh the directory view
-        }
-        App.showLoading(false);
-    })
-    .catch(error => {
-        console.error('Error deleting items:', error);
-        alert(error.error || 'An error occurred while deleting the items.');
-        App.showLoading(false);
-    });
-};
-
 // Function to download all files as a ZIP with progress (New Implementation)
 App.downloadAll = function() {
     const id = App.generateUniqueId();
@@ -245,6 +215,9 @@ App.downloadAll = function() {
     App.activeDownloadXHRs[id] = xhr; // Store XHR with unique ID for cancellation
     xhr.open('GET', '/download_all', true);
     xhr.responseType = 'blob';
+
+    // Set the CSRF token in the header (if required)
+    App.setCSRFHeader(xhr);
 
     // Track download progress
     xhr.onprogress = function(event) {
@@ -302,6 +275,55 @@ App.downloadAll = function() {
     xhr.send();
 };
 
+// Function to delete items
+App.deleteItems = function(paths) {
+    if (!confirm(`Are you sure you want to delete ${paths.length} item(s)? This action cannot be undone.`)) {
+        return;
+    }
+
+    App.showLoading(true);
+    const csrfToken = App.getCSRFToken();
+
+    fetch('/delete', {  // Ensure this endpoint matches the backend route
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken  // Include CSRF token in headers
+        },
+        body: JSON.stringify({ path: paths }), // Send array
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => { throw data; });
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.error) {
+            alert(data.error);
+        } else {
+            if (data.errors && data.errors.length > 0) {
+                let message = 'Some items were not deleted:\n';
+                data.errors.forEach(err => {
+                    message += `- ${err.path}: ${err.error}\n`;
+                });
+                alert(message);
+            } else {
+                alert('Items deleted successfully.');
+            }
+            App.selectedItems.clear();
+            App.updateSelectedItemsPanel();
+            App.loadDirectory(App.currentPath); // Refresh the directory view
+        }
+        App.showLoading(false);
+    })
+    .catch(error => {
+        console.error('Error deleting items:', error);
+        alert(error.error || 'An error occurred while deleting the items.');
+        App.showLoading(false);
+    });
+};
+
 // Function to cancel ongoing upload or download
 App.cancelOperation = function(id, type) {
     if (type === 'upload' && App.activeUploadXHRs[id]) {
@@ -334,6 +356,8 @@ App.uploadFiles = function() {
         return;
     }
 
+    const csrfToken = App.getCSRFToken();
+
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const id = App.generateUniqueId();
@@ -346,6 +370,9 @@ App.uploadFiles = function() {
         const xhr = new XMLHttpRequest();
         App.activeUploadXHRs[id] = xhr; // Assign to activeUploadXHRs for cancellation
         xhr.open('POST', '/upload', true);
+
+        // Set the CSRF token in the header
+        App.setCSRFHeader(xhr);
 
         // Track upload progress
         xhr.upload.onprogress = function(event) {
@@ -407,6 +434,8 @@ App.uploadFolders = function() {
     const formData = new FormData();
     formData.append('path', App.currentPath); // Current directory
 
+    const csrfToken = App.getCSRFToken();
+
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
         // Append each file with its relative path
@@ -419,6 +448,9 @@ App.uploadFolders = function() {
     const xhr = new XMLHttpRequest();
     App.activeUploadXHRs[id] = xhr; // Assign to activeUploadXHRs for cancellation
     xhr.open('POST', '/upload', true);
+
+    // Set the CSRF token in the header
+    App.setCSRFHeader(xhr);
 
     // Track upload progress
     xhr.upload.onprogress = function(event) {
@@ -436,6 +468,7 @@ App.uploadFolders = function() {
             } else {
                 alert('Folder uploaded successfully.');
                 App.loadDirectory(App.currentPath);
+                App.closeAddFolderModal();
             }
         } else {
             try {
@@ -465,4 +498,69 @@ App.uploadFolders = function() {
 
     // Reset the input
     input.value = '';
+};
+
+// Function to confirm and execute the move action
+App.confirmMove = function() {
+    // Allow empty destinationPath to represent root
+    if (App.selectedDestinationPath === null || App.selectedDestinationPath === undefined) {
+        alert('Please select a destination folder.');
+        return;
+    }
+
+    // Confirm the move action
+    if (!confirm(`Are you sure you want to move ${App.selectedItems.size} item(s) to "${App.selectedDestinationPath || 'Root'}"?`)) {
+        return;
+    }
+
+    App.showLoading(true);
+
+    fetch('/move_items', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': App.getCSRFToken()  // Include CSRF token in headers
+        },
+        body: JSON.stringify({
+            source_paths: Array.from(App.selectedItems),
+            destination_path: App.selectedDestinationPath // Can be empty string for root
+        }),
+    })
+    .then(response => {
+        if (response.status === 207) { // Multi-Status
+            return response.json().then(data => {
+                if (data.moved.length > 0) {
+                    alert(`Successfully moved ${data.moved.length} item(s).`);
+                }
+                if (data.errors.length > 0) {
+                    let errorMsg = 'Some items could not be moved:\n';
+                    data.errors.forEach(err => {
+                        errorMsg += `- ${err.path}: ${err.error}\n`;
+                    });
+                    alert(errorMsg);
+                }
+                App.loadDirectory(App.currentPath); // Refresh the directory view
+                App.closeDestinationModal();
+                App.selectedItems.clear();
+                App.updateSelectedItemsPanel();
+            });
+        } else if (!response.ok) {
+            return response.json().then(data => { throw data; });
+        } else {
+            return response.json().then(data => {
+                alert(data.message);
+                App.loadDirectory(App.currentPath); // Refresh the directory view
+                App.closeDestinationModal();
+                App.selectedItems.clear();
+                App.updateSelectedItemsPanel();
+            });
+        }
+    })
+    .catch(error => {
+        console.error('Error moving items:', error);
+        alert(error.error || 'An error occurred while moving the items.');
+    })
+    .finally(() => {
+        App.showLoading(false);
+    });
 };

@@ -167,6 +167,7 @@ App.submitAddFolder = function() {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
+            'X-CSRFToken': App.getCSRFToken() // Include CSRF token
         },
         body: JSON.stringify({
             path: App.currentPath,
@@ -215,6 +216,7 @@ App.submitAddFile = function() {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
+            'X-CSRFToken': App.getCSRFToken() // Include CSRF token
         },
         body: JSON.stringify({
             path: App.currentPath,
@@ -259,6 +261,7 @@ App.confirmMove = function() {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
+            'X-CSRFToken': App.getCSRFToken() // Include CSRF token
         },
         body: JSON.stringify({
             source_paths: Array.from(App.selectedItems),

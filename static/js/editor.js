@@ -54,6 +54,7 @@ App.saveEditor = function() {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
+            'X-CSRFToken': App.getCSRFToken()
         },
         body: JSON.stringify({
             path: App.currentEditingFilePath,

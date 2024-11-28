@@ -28,38 +28,6 @@ App.loadDirectory = function(path) {
         });
 };
 
-App.loadSidebar = function() {
-    fetch('/api/list?path=')
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                console.error('Error loading sidebar:', data.error);
-                return;
-            }
-            const sidebarList = document.getElementById('sidebar-list');
-            sidebarList.innerHTML = '';
-            data.directories.forEach(directory => {
-                const fullPath = directory; // Relative path
-                const listItem = document.createElement('li');
-                const link = document.createElement('a');
-                link.href = '#';
-                link.textContent = directory.split('/').pop(); // Display only the directory name
-                link.setAttribute('data-path', fullPath);
-                link.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    const newPath = fullPath;
-                    App.navigationHistory.push(App.currentPath); // Push current path to history before navigating
-                    App.loadDirectory(newPath);
-                });
-                listItem.appendChild(link);
-                sidebarList.appendChild(listItem);
-            });
-        })
-        .catch(error => {
-            console.error('Error loading sidebar:', error);
-        });
-};
-
 App.updateBreadcrumb = function(breadcrumb) {
     const breadcrumbLinks = document.getElementById('breadcrumb-links');
     breadcrumbLinks.innerHTML = ''; // Clear existing breadcrumb links

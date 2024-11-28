@@ -21,7 +21,6 @@ window.App = {
 // Initialize the application once the DOM is fully loaded
 document.addEventListener('DOMContentLoaded', () => {
     App.loadDirectory('');
-    App.loadSidebar();
     App.setupSelectedItemsPanel();
     App.setupNavigationButtons();
     App.setupEditor();
