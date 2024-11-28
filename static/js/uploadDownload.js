@@ -1,5 +1,12 @@
 // uploadDownload.js
 
+// Ensure the App namespace exists
+var App = App || {};
+
+// Initialize active XHR objects for uploads and downloads
+App.activeUploadXHRs = App.activeUploadXHRs || {};
+App.activeDownloadXHRs = App.activeDownloadXHRs || {};
+
 // Initialize CSRF Token
 App.getCSRFToken = function() {
     const meta = document.querySelector('meta[name="csrf-token"]');
@@ -295,8 +302,6 @@ App.uploadFiles = function() {
         return;
     }
 
-    const csrfToken = App.getCSRFToken();
-
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const id = App.generateUniqueId();
@@ -372,8 +377,6 @@ App.uploadFolders = function() {
 
     const formData = new FormData();
     formData.append('path', App.currentPath); // Current directory
-
-    const csrfToken = App.getCSRFToken();
 
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -567,50 +570,8 @@ App.removeProgressBar = function(id) {
 
 // Function to show or hide a loading indicator
 App.showLoading = function(show) {
-    const loadingIndicator = document.getElementById('loading-indicator');
+    const loadingIndicator = document.getElementById('loading');
     if (loadingIndicator) {
         loadingIndicator.style.display = show ? 'block' : 'none';
     }
 };
-
-// Function to load the current directory view
-App.loadDirectory = function(path) {
-    // Implement directory loading logic (e.g., fetch files and directories via /api/list)
-    // This is a placeholder for your existing implementation
-};
-
-// Function to open the editor for a file
-App.openEditor = function(path) {
-    // Implement file editor logic
-    // This is a placeholder for your existing implementation
-};
-
-// Function to open the destination selection modal
-App.openDestinationModal = function() {
-    // Implement modal opening logic
-    // This is a placeholder for your existing implementation
-};
-
-// Function to update the selected items panel
-App.updateSelectedItemsPanel = function() {
-    // Implement UI update logic
-    // This is a placeholder for your existing implementation
-};
-
-// Function to handle uploading from input elements
-App.setupUploadHandlers = function() {
-    const uploadFileInput = document.getElementById('upload-file-input');
-    if (uploadFileInput) {
-        uploadFileInput.addEventListener('change', App.uploadFiles);
-    }
-
-    const uploadFolderInput = document.getElementById('upload-folder-input');
-    if (uploadFolderInput) {
-        uploadFolderInput.addEventListener('change', App.uploadFolders);
-    }
-};
-
-// Initialize upload handlers on DOMContentLoaded
-document.addEventListener('DOMContentLoaded', function() {
-    App.setupUploadHandlers();
-});
