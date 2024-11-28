@@ -8,10 +8,10 @@ services:
     container_name: docker-nas
     restart: unless-stopped
     environment:
-      - USERNAME=${USERNAME}
       - VOLUME=${VOLUME}
+      - HOST_PATH=${HOST_PATH}
     volumes:
-      - nas:${VOLUME}
+      - ${HOST_PATH}:${VOLUME}
       - data:/data:rw
     ports:
       - "8080:5000"

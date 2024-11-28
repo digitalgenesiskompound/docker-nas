@@ -16,7 +16,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 from auth.utils import check_password
 
-from config import DATA_DIR, CREDENTIALS_FILE, VOLUME, USERNAME  # Import VOLUME
+from config import VOLUME
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 CORS(app, resources={r"/*": {"origins": "*"}})  # Adjust origins as needed for security
@@ -334,6 +334,8 @@ def download_all():
         if not os.path.exists(VOLUME):
             logger.error("Backup directory not found.")
             return jsonify({'error': 'Backup directory not found.'}), 500
+        
+        username = current_user.id
 
         logger.info("Creating ZIP for all backups.")
 
@@ -358,7 +360,7 @@ def download_all():
         zip_buffer.seek(0)
 
         # Serve the zip file as a downloadable response with a custom name
-        zip_filename = f"{USERNAME}-all.zip"
+        zip_filename = f"{username}-all.zip"
         logger.info(f"Serving ZIP file: {zip_filename}")
         return Response(
             zip_buffer,
@@ -384,6 +386,8 @@ def download_selected():
         if not selected_paths:
             logger.error("No files or directories selected for download.")
             return jsonify({'error': 'No files or directories selected for download.'}), 400
+        
+        username = current_user.id
 
         # Secure and validate all selected paths
         absolute_paths = [secure_path(path) for path in selected_paths]
@@ -414,7 +418,7 @@ def download_selected():
                             zip_file.write(file_path, relative_file_path)
                             logger.debug(f"Added to ZIP: {relative_file_path}")
                 zip_buffer.seek(0)
-                zip_filename = f"{USERNAME}-{os.path.basename(selected_path)}.zip"
+                zip_filename = f"{username}-{os.path.basename(selected_path)}.zip"
                 logger.info(f"Serving ZIP file: {zip_filename}")
                 return Response(
                     zip_buffer,
@@ -450,7 +454,7 @@ def download_selected():
         zip_buffer.seek(0)
 
         # Serve the zip file as a downloadable response with a custom name
-        zip_filename = f"{USERNAME}-selected.zip"
+        zip_filename = f"{username}-selected.zip"
         logger.info(f"Serving ZIP file: {zip_filename}")
         return Response(
             zip_buffer,
