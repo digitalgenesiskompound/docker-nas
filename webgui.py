@@ -4,11 +4,12 @@ import zipfile
 import pathlib
 import shutil
 import logging
+from datetime import timedelta
 from logging.handlers import RotatingFileHandler
 
 from flask import (
     Flask, send_file, send_from_directory, abort, render_template,
-    request, Response, jsonify, redirect, url_for, flash
+    request, Response, jsonify, redirect, url_for, flash, current_app
 )
 from flask_cors import CORS
 from flask_login import (
@@ -20,8 +21,8 @@ from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 
-from auth.models import user_exists, create_user, get_user
-from auth.forms import SetupForm, LoginForm
+from auth.models import user_exists, create_user, get_user, update_password
+from auth.forms import SetupForm, LoginForm, ChangePasswordForm
 from auth.utils import check_password
 
 from config import VOLUME
@@ -36,6 +37,7 @@ class Config:
     CORS_ORIGINS = os.getenv("CORS_ORIGINS")  # Adjust as needed
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
     LOG_FILE = os.getenv("LOG_FILE", "app.log")
+    REMEMBER_COOKIE_DURATION = timedelta(days=3)
 
 # Initialize Flask App
 app = Flask(__name__, static_folder='static', template_folder='templates')
@@ -141,6 +143,17 @@ def require_login():
             return redirect(url_for('login'))
     if request.endpoint not in allowed_routes and not current_user.is_authenticated:
         return redirect(url_for('login'))
+    
+@app.after_request
+def add_header(response):
+    """
+    Add headers to disable caching for specific routes.
+    """
+    if request.endpoint in ['login', 'change_password', 'setup']:
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    return response
 
 # Routes
 
@@ -171,13 +184,32 @@ def login():
             form.username.data == user['username'] and 
             check_password(form.password.data, user['password'])):
             user_obj = User(user['username'])
-            login_user(user_obj)
+            remember = form.remember.data
+            login_user(user_obj, remember=remember)
             flash('Logged in successfully.', 'success')
             return redirect(url_for('index'))
         else:
             flash('Invalid username or password.', 'danger')
     
     return render_template('login.html', form=form)
+
+@app.route('/change_password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    form = ChangePasswordForm()
+    if form.validate_on_submit():
+        user = get_user()
+        if user and check_password(form.current_password.data, user['password']):
+            success = update_password(form.new_password.data)
+            if success:
+                flash('Your password has been updated successfully.', 'success')
+                return redirect(url_for('index'))
+            else:
+                flash('An error occurred while updating your password.', 'danger')
+        else:
+            flash('Current password is incorrect.', 'danger')
+    return render_template('change_password.html', form=form)
+
 
 @app.route('/logout')
 @login_required

@@ -140,6 +140,9 @@
 <div class="hamburger-menu" id="hamburger-menu" aria-label="Menu" role="button" tabindex="0">
     <i class="bi bi-list"></i>
     <div class="dropdown-menu" id="hamburger-dropdown">
+        <a href="{{ url_for('change_password') }}" class="dropdown-item">
+            <i class="bi bi-key"></i> Change Password
+        </a>
         <a href="{{ url_for('logout') }}" class="dropdown-item">
             <i class="bi bi-box-arrow-right"></i> Logout
         </a>

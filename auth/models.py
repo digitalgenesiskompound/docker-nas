@@ -28,3 +28,13 @@ def get_user():
         return None
     with open(CREDENTIALS_FILE, 'r') as f:
         return json.load(f)
+
+def update_password(new_password):
+    """Update the user's password."""
+    if not user_exists():
+        return False
+    user = get_user()
+    user['password'] = generate_password_hash(new_password)
+    with open(CREDENTIALS_FILE, 'w') as f:
+        json.dump(user, f)
+    return True

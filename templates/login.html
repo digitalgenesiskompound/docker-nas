@@ -16,40 +16,64 @@
     <link rel="stylesheet" type="text/css" href="/static/css/login.css">
 </head>
 <body>
-    <div class="auth-wrapper">
-        <div class="auth-container">
-            <h1 class="mb-3">
-                <i class="bi bi-box-arrow-in-right"></i> Docker Volume Explorer
-            </h1>
-            <h4 class="mb-4">Login</h4>
-            
-            {% with messages = get_flashed_messages(with_categories=true) %}
-              {% if messages %}
-                {% for category, message in messages %}
-                  <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                  </div>
-                {% endfor %}
-              {% endif %}
-            {% endwith %}
-            
-            <form method="POST">
-                {{ form.hidden_tag() }}
-                <div class="mb-3">
-                    {{ form.username.label(class="form-label") }}
-                    {{ form.username(class="form-control", placeholder="Enter Username") }}
+  <div class="auth-wrapper">
+      <div class="auth-container">
+          <h1 class="mb-3">
+              <i class="bi bi-box-arrow-in-right"></i> Docker Volume Explorer
+          </h1>
+          <h4 class="mb-4">Login</h4>
+          
+          <!-- Flash Messages -->
+          {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+              {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                  {{ message }}
+                  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
-                <div class="mb-4">
-                    {{ form.password.label(class="form-label") }}
-                    {{ form.password(class="form-control", placeholder="Enter Password") }}
-                </div>
-                <button type="submit" class="btn-submit w-100">Login</button>
-            </form>
-        </div>
-    </div>
+              {% endfor %}
+            {% endif %}
+          {% endwith %}
+          
+          <form method="POST">
+              {{ form.hidden_tag() }}
+              <div class="mb-3">
+                  {{ form.username.label(class="form-label") }}
+                  {{ form.username(class="form-control", placeholder="Enter Username") }}
+              </div>
+              <div class="mb-4">
+                  {{ form.password.label(class="form-label") }}
+                  {{ form.password(class="form-control", placeholder="Enter Password") }}
+              </div>
+              <div class="mb-3 form-check">
+                  {{ form.remember(class="form-check-input") }}
+                  {{ form.remember.label(class="form-check-label") }}
+              </div>
+              <button type="submit" class="btn-submit w-100">Login</button>
+          </form>
+      </div>
+  </div>
     
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+  <!-- Auto-Dismiss Flash Messages -->
+  <script>
+      document.addEventListener('DOMContentLoaded', function() {
+          // Set timeout duration (e.g., 5 seconds)
+          const flashTimeout = 5000;
+          
+          // Select all flash messages
+          const flashMessages = document.querySelectorAll('.alert');
+          
+          flashMessages.forEach(function(message) {
+              // Automatically hide the message after the timeout
+              setTimeout(function() {
+                  // Use Bootstrap's alert dispose method
+                  const alert = new bootstrap.Alert(message);
+                  alert.close();
+              }, flashTimeout);
+          });
+      });
+  </script>
 </body>
 </html>
