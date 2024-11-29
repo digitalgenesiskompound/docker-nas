@@ -18,24 +18,6 @@ services:
     networks:
       - nas-network
 
-  nginx:
-    build:
-      context: ./nginx
-      dockerfile: Dockerfile
-    container_name: docker-nas-nginx
-    restart: unless-stopped
-    ports:
-      - "443:443"
-      - "80:80"
-    volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d
-      - ./nginx/ssl:/etc/nginx/ssl
-      - ./static:/app/static
-    networks:
-      - nas-network
-    depends_on:
-      - web
-
 volumes:
   nas: 
   data:
