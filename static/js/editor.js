@@ -1,7 +1,6 @@
-// editor.js
-
+// Function to set up Monaco Editor
 App.setupEditor = function() {
-    require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.1/min/vs' }});
+    require.config({ paths: { 'vs': '/static/js/vendor/monaco/vs' }});
     require(['vs/editor/editor.main'], function() {
         App.editor = monaco.editor.create(document.getElementById('editor'), {
             value: '',
@@ -9,6 +8,9 @@ App.setupEditor = function() {
             theme: 'vs-dark',
             automaticLayout: true
         });
+    }, function(err) {
+        console.error('Failed to load Monaco Editor:', err);
+        App.showToast('Failed to load the editor.', 'danger');
     });
 };
 
@@ -18,7 +20,7 @@ App.openEditor = function(filePath) {
         .then(response => response.json())
         .then(data => {
             if (data.error) {
-                alert(data.error);
+                App.showToast(data.error);
                 return;
             }
             App.editor.setValue(data.content);
@@ -29,7 +31,7 @@ App.openEditor = function(filePath) {
         })
         .catch(error => {
             console.error('Error fetching file content:', error);
-            alert('An error occurred while fetching the file content.');
+            App.showToast('An error occurred while fetching the file content.');
         });
 };
 
@@ -64,16 +66,16 @@ App.saveEditor = function() {
     .then(response => response.json())
     .then(data => {
         if (data.error) {
-            alert(data.error);
+            App.showToast(data.error);
         } else {
-            alert('File saved successfully.');
+            App.showToast('File saved successfully.');
             App.closeEditor();
             App.loadDirectory(App.currentPath); // Refresh the directory view
         }
     })
     .catch(error => {
         console.error('Error saving file:', error);
-        alert('An error occurred while saving the file.');
+        App.showToast('An error occurred while saving the file.');
     });
 };
 

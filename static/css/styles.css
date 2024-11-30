@@ -572,7 +572,7 @@ h1 {
 }
 
 /* Modal Styles */
-.modal {
+.custom-modal {
     display: none; /* Hidden by default */
     position: fixed; /* Stay in place */
     z-index: 1003; /* Sit on top */
@@ -584,7 +584,7 @@ h1 {
     background-color: rgba(0, 0, 0, 0.7); /* Black w/ opacity */
 }
 
-.modal-content {
+.custom-modal-content {
     background-color: #2c2c2c;
     margin: 5% auto; /* 5% from the top and centered */
     padding: 20px;
@@ -607,6 +607,17 @@ h1 {
     color: #ffffff;
     text-decoration: none;
     cursor: pointer;
+}
+
+.custom-selection-content {
+    background-color: #2c2c2c;
+    margin: 5% auto; /* 5% from the top and centered */
+    padding: 20px;
+    border: 1px solid #888;
+    width: 80%; /* Could be more or less, depending on screen size */
+    border-radius: 8px;
+    color: #ffffff;
+    pointer-events: all;
 }
 
 /* /home/ngk/docker-nas/static/styles.css */
@@ -668,17 +679,17 @@ h1 {
 }
 
 /* Ensure modals are styled consistently */
-.modal-content {
+.custom-modal-content {
     display: flex;
     flex-direction: column;
     align-items: center;
 }
 
-.modal-content h2 {
+.custom-modal-content h2 {
     margin-bottom: 15px;
 }
 
-.modal-content input {
+.custom-modal-content input {
     width: 80%;
     padding: 10px;
     margin-bottom: 10px;
@@ -686,7 +697,7 @@ h1 {
     border-radius: 4px;
 }
 
-.modal-content button {
+.custom-modal-content button {
     padding: 10px 20px;
     background-color: #4caf50;
     color: white;
@@ -696,7 +707,7 @@ h1 {
     transition: background-color 0.3s;
 }
 
-.modal-content button:hover {
+.custom-modal-content button:hover {
     background-color: #45a049;
 }
 

@@ -9,7 +9,7 @@ App.loadDirectory = function(path) {
         .then(response => response.json())
         .then(data => {
             if (data.error) {
-                alert(data.error);
+                App.showToast(data.error);
                 App.showLoading(false); // Hide loading spinner
                 return;
             }
@@ -23,7 +23,7 @@ App.loadDirectory = function(path) {
         })
         .catch(error => {
             console.error('Error fetching directory:', error);
-            alert('An error occurred while loading the directory.');
+            App.showToast('An error occurred while loading the directory.');
             App.showLoading(false); // Hide loading spinner
         });
 };
@@ -120,7 +120,7 @@ App.performGlobalSearch = function (query) {
         .then(response => response.json())
         .then(data => {
             if (data.error) {
-                alert(data.error);
+                App.showToast(data.error);
                 showLoading(false);
                 return;
             }
@@ -132,7 +132,7 @@ App.performGlobalSearch = function (query) {
         })
         .catch(error => {
             console.error('Error performing search:', error);
-            alert('An error occurred while searching.');
+            App.showToast('An error occurred while searching.');
             showLoading(false);
         });
 }

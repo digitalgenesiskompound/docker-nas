@@ -20,7 +20,7 @@ App.loadDestinationFolders = function(path) {
         .then(response => response.json())
         .then(data => {
             if (data.error) {
-                alert(data.error);
+                App.showToast(data.error);
                 return;
             }
             const folderList = document.getElementById('destination-folder-list');
@@ -96,7 +96,7 @@ App.loadDestinationFolders = function(path) {
         })
         .catch(error => {
             console.error('Error loading destination folders:', error);
-            alert('An error occurred while loading destination folders.');
+            App.showToast('An error occurred while loading destination folders.');
         });
 };
 
@@ -158,7 +158,7 @@ App.closeAddFolderModal = function() {
 App.submitAddFolder = function() {
     const folderName = document.getElementById('new-folder-name').value.trim();
     if (folderName === '') {
-        alert('Folder name cannot be empty.');
+        App.showToast('Folder name cannot be empty.');
         return;
     }
 
@@ -177,16 +177,16 @@ App.submitAddFolder = function() {
     .then(response => response.json())
     .then(data => {
         if (data.error) {
-            alert(`Error: ${data.error}`);
+            App.showToast(`Error: ${data.error}`);
         } else {
-            alert('Folder created successfully.');
+            App.showToast('Folder created successfully.');
             App.loadDirectory(App.currentPath);
             App.closeAddFolderModal();
         }
     })
     .catch(error => {
         console.error('Error creating folder:', error);
-        alert('An error occurred while creating the folder.');
+        App.showToast('An error occurred while creating the folder.');
     })
     .finally(() => {
         App.showLoading(false);
@@ -207,7 +207,7 @@ App.closeAddFileModal = function() {
 App.submitAddFile = function() {
     const fileName = document.getElementById('new-file-name').value.trim();
     if (fileName === '') {
-        alert('File name cannot be empty.');
+        App.showToast('File name cannot be empty.');
         return;
     }
 
@@ -226,16 +226,16 @@ App.submitAddFile = function() {
     .then(response => response.json())
     .then(data => {
         if (data.error) {
-            alert(`Error: ${data.error}`);
+            App.showToast(`Error: ${data.error}`);
         } else {
-            alert('File created successfully.');
+            App.showToast('File created successfully.');
             App.loadDirectory(App.currentPath);
             App.closeAddFileModal();
         }
     })
     .catch(error => {
         console.error('Error creating file:', error);
-        alert('An error occurred while creating the file.');
+        App.showToast('An error occurred while creating the file.');
     })
     .finally(() => {
         App.showLoading(false);
@@ -246,63 +246,104 @@ App.submitAddFile = function() {
 App.confirmMove = function() {
     // Allow empty destinationPath to represent root
     if (App.selectedDestinationPath === null || App.selectedDestinationPath === undefined) {
-        alert('Please select a destination folder.');
+        App.showToast('Please select a destination folder.');
         return;
     }
 
-    // Confirm the move action
-    if (!confirm(`Are you sure you want to move ${App.selectedItems.size} item(s) to "${App.selectedDestinationPath || 'Root'}"?`)) {
-        return;
-    }
+    // Use the custom confirmation modal instead of the native confirm()
+    App.showConfirmation(`Are you sure you want to move ${App.selectedItems.size} item(s) to "${App.selectedDestinationPath || 'Root'}"?`, 'Confirm Move')
+        .then(() => {
+            // User confirmed - proceed with moving items
+            App.showLoading(true);
 
-    App.showLoading(true);
+            return fetch('/move_items', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': App.getCSRFToken() // Include CSRF token
+                },
+                body: JSON.stringify({
+                    source_paths: Array.from(App.selectedItems),
+                    destination_path: App.selectedDestinationPath // Can be empty string for root
+                }),
+            });
+        })
+        .then(response => {
+            if (response.status === 207) { // Multi-Status
+                return response.json().then(data => {
+                    if (data.moved.length > 0) {
+                        App.showToast(`Successfully moved ${data.moved.length} item(s).`, 'success');
+                    }
+                    if (data.errors.length > 0) {
+                        let errorMsg = 'Some items could not be moved:\n';
+                        data.errors.forEach(err => {
+                            errorMsg += `- ${err.path}: ${err.error}\n`;
+                        });
+                        App.showToast(errorMsg, 'danger');
+                    }
+                    App.loadDirectory(App.currentPath); // Refresh the directory view
+                    App.closeDestinationModal();
+                    App.selectedItems.clear();
+                    App.updateSelectedItemsPanel();
+                });
+            } else if (!response.ok) {
+                return response.json().then(data => { throw data; });
+            } else {
+                return response.json().then(data => {
+                    App.showToast(data.message, 'success');
+                    App.loadDirectory(App.currentPath); // Refresh the directory view
+                    App.closeDestinationModal();
+                    App.selectedItems.clear();
+                    App.updateSelectedItemsPanel();
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error moving items:', error);
+            App.showToast(error.error || 'An error occurred while moving the items.', 'danger');
+        })
+        .finally(() => {
+            App.showLoading(false);
+        });
+};
 
-    fetch('/move_items', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': App.getCSRFToken() // Include CSRF token
-        },
-        body: JSON.stringify({
-            source_paths: Array.from(App.selectedItems),
-            destination_path: App.selectedDestinationPath // Can be empty string for root
-        }),
-    })
-    .then(response => {
-        if (response.status === 207) { // Multi-Status
-            return response.json().then(data => {
-                if (data.moved.length > 0) {
-                    alert(`Successfully moved ${data.moved.length} item(s).`);
-                }
-                if (data.errors.length > 0) {
-                    let errorMsg = 'Some items could not be moved:\n';
-                    data.errors.forEach(err => {
-                        errorMsg += `- ${err.path}: ${err.error}\n`;
-                    });
-                    alert(errorMsg);
-                }
-                App.loadDirectory(App.currentPath); // Refresh the directory view
-                App.closeDestinationModal();
-                App.selectedItems.clear();
-                App.updateSelectedItemsPanel();
-            });
-        } else if (!response.ok) {
-            return response.json().then(data => { throw data; });
-        } else {
-            return response.json().then(data => {
-                alert(data.message);
-                App.loadDirectory(App.currentPath); // Refresh the directory view
-                App.closeDestinationModal();
-                App.selectedItems.clear();
-                App.updateSelectedItemsPanel();
-            });
-        }
-    })
-    .catch(error => {
-        console.error('Error moving items:', error);
-        alert(error.error || 'An error occurred while moving the items.');
-    })
-    .finally(() => {
-        App.showLoading(false);
+// Function to show the confirmation modal
+App.showConfirmation = function(message, title = 'Confirm Action') {
+    return new Promise((resolve, reject) => {
+        // Set the modal title and message
+        document.getElementById('confirmationModalLabel').textContent = title;
+        document.getElementById('confirmationModalMessage').textContent = message;
+
+        // Initialize the Bootstrap modal
+        const confirmationModalElement = document.getElementById('confirmationModal');
+        const confirmationModal = new bootstrap.Modal(confirmationModalElement, {
+            keyboard: false,
+            backdrop: 'static' // Prevent closing by clicking outside
+        });
+        confirmationModal.show();
+
+        // Handler for the confirm button
+        const confirmButton = document.getElementById('confirmActionButton');
+        const onConfirm = () => {
+            // Hide the modal
+            confirmationModal.hide();
+            // Clean up event listeners
+            confirmButton.removeEventListener('click', onConfirm);
+            // Resolve the promise
+            resolve();
+        };
+
+        // Attach the event listener to the confirm button
+        confirmButton.addEventListener('click', onConfirm);
+
+        // Handler for modal dismissal without confirmation
+        confirmationModalElement.addEventListener('hidden.bs.modal', () => {
+            // Clean up event listeners
+            confirmButton.removeEventListener('click', onConfirm);
+            // Reject the promise
+            reject();
+        }, { once: true });
     });
 };
+
+

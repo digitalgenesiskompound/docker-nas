@@ -1,7 +1,10 @@
 // main.js
 
-// Define the global App namespace
-window.App = {
+// Ensure the global App namespace exists
+window.App = window.App || {};
+
+// Extend the App namespace without overwriting
+Object.assign(App, {
     currentPath: '',
     allDirectories: [],
     allFiles: [],
@@ -16,7 +19,7 @@ window.App = {
 
     activeUploadXHRs: {}, // Object to store active upload XHRs with unique IDs
     activeDownloadXHRs: {}, // Object to store active download XHRs with unique IDs
-};
+});
 
 // Initialize the application once the DOM is fully loaded
 document.addEventListener('DOMContentLoaded', () => {
@@ -37,7 +40,7 @@ App.setupNavigationButtons = function() {
             const previousPath = App.navigationHistory.pop();
             App.loadDirectory(previousPath);
         } else {
-            alert('No previous directory.');
+            App.showToast('No previous directory.');
         }
     });
 

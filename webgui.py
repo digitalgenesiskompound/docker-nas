@@ -37,7 +37,7 @@ class Config:
     CORS_ORIGINS = os.getenv("CORS_ORIGINS")  # Adjust as needed
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
     LOG_FILE = os.getenv("LOG_FILE", "app.log")
-    REMEMBER_COOKIE_DURATION = timedelta(days=3)
+    REMEMBER_COOKIE_DURATION = timedelta(days=3) # Remember me for " " days
 
 # Initialize Flask App
 app = Flask(__name__, static_folder='static', template_folder='templates')
