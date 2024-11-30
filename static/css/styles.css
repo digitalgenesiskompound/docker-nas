@@ -141,7 +141,14 @@ h1 {
     width: 0%;
     background: linear-gradient(90deg, #cccccc, #e0e0e0); /* Light grey gradient */
     border-radius: 5px;
-    transition: width 0.4s ease;
+    transition: width 0.4s ease, background 0.4s ease;
+}
+
+/* Indeterminate Progress Bar Animation */
+.progress-bar.indeterminate {
+    background: linear-gradient(90deg, #cccccc, #e0e0e0);
+    background-size: 200% 100%;
+    animation: indeterminate 1.5s infinite linear;
 }
 
 @keyframes indeterminate {
@@ -978,28 +985,39 @@ body {
 
 /* Progress Tray Styling */
 .progress-tray {
-    display: none; /* Hide by default */
+    display: none; /* Hidden by default */
     position: fixed;
     bottom: 20px;
     left: 20px;
-    width: 300px;
+    width: 350px;
     background-color: rgba(44, 44, 44, 0.95);
     border: 1px solid #444;
-    border-radius: 8px;
-    padding: 10px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    border-radius: 10px; /* Rounded corners */
+    padding: 15px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); /* Subtle shadow */
     z-index: 1004; /* Above other elements */
-    transition: transform 0.3s ease, opacity 0.3s ease;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    
+    /* Add Flex Direction and Alignment */
+    display: flex;
+    flex-direction: column; /* Stack children vertically */
+    align-items: stretch;    /* Stretch children to fill width */
 }
 
+.progress-tray.show {
+    opacity: 1;
+    transform: translateY(0);
+    display: flex !important;
+}
 
 .toggle-tray-button {
-    width: 100%;
     background-color: #4caf50; /* Green background */
     color: #ffffff; /* White text */
     border: none;
     border-radius: 6px;
-    padding: 8px 0;
+    padding: 10px;
     cursor: pointer;
     font-size: 1em;
     font-weight: bold;
@@ -1007,6 +1025,9 @@ body {
     align-items: center;
     justify-content: center;
     transition: background-color 0.3s, transform 0.2s;
+    
+    width: 100%; /* Ensure full width */
+    box-sizing: border-box; /* Include padding and border in width */
 }
 
 .toggle-tray-button:hover {
@@ -1015,24 +1036,36 @@ body {
 }
 
 .progress-list {
-    margin-top: 10px;
-    max-height: 200px;
+    margin-top: 15px;
+    max-height: 250px;
     overflow-y: auto;
+    
+    /* Allow the progress list to grow and fill available space */
+    flex-grow: 1;
+    width: 100%; /* Ensure full width */
+    box-sizing: border-box; /* Include padding and border in width */
 }
 
+/* Individual Progress Item */
 .progress-item {
     background-color: #3a3a3a;
-    padding: 10px;
-    border-radius: 6px;
-    margin-bottom: 10px;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 12px;
     color: #e0e0e0;
     display: flex;
     flex-direction: column;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    
+    /* Ensure full width */
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .progress-label {
     font-weight: bold;
-    margin-bottom: 5px;
+    margin-bottom: 6px;
+    font-size: 0.95em;
 }
 
 .progress-container {
@@ -1040,16 +1073,31 @@ body {
     background-color: #555;
     border-radius: 5px;
     position: relative;
-    height: 20px;
-    margin-bottom: 5px;
+    height: 18px;
+    overflow: hidden;
 }
 
-.progress-container .progress-bar {
+.progress-bar {
     height: 100%;
     width: 0%;
-    background-color: #4caf50; /* Green color */
+    background: linear-gradient(90deg, #4caf50, #81c784); /* Green gradient */
     border-radius: 5px;
-    transition: width 0.4s ease;
+    transition: width 0.4s ease, background 0.4s ease;
+}
+
+.progress-bar.indeterminate {
+    background: linear-gradient(90deg, #cccccc, #e0e0e0);
+    background-size: 200% 100%;
+    animation: indeterminate 1.5s infinite linear;
+}
+
+@keyframes indeterminate {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
 }
 
 .progress-text {
@@ -1058,7 +1106,7 @@ body {
     left: 50%;
     transform: translateX(-50%);
     font-size: 0.8em;
-    line-height: 20px;
+    line-height: 18px;
     color: #ffffff;
 }
 
@@ -1067,7 +1115,7 @@ body {
     background-color: #e74c3c; /* Red background */
     color: #ffffff;
     border: none;
-    padding: 5px 10px;
+    padding: 5px 12px;
     border-radius: 4px;
     cursor: pointer;
     font-size: 0.8em;
@@ -1077,16 +1125,6 @@ body {
 .cancel-button:hover {
     background-color: #c0392b; /* Darker red on hover */
     transform: translateY(-2px);
-}
-
-/* Ensure progress-tray is hidden initially */
-.progress-list {
-    display: none;
-}
-
-/* Position Toggle Button at the Top of Progress Tray */
-.progress-tray .toggle-tray-button {
-    margin-bottom: 10px;
 }
 
 /* Scrollbar Styling for Progress List */
@@ -1113,11 +1151,15 @@ body {
     }
 
     .progress-item {
+        padding: 10px;
+    }
+
+    .progress-label {
         font-size: 0.9em;
     }
 
     .progress-container {
-        height: 18px;
+        height: 16px;
     }
 
     .progress-text {
@@ -1132,14 +1174,16 @@ body {
 
 /* Optional: Animate Progress Tray on Toggle */
 .progress-tray.show {
-    transform: translateY(0);
     opacity: 1;
+    transform: translateY(0);
+    display: flex !important;
 }
 
 .progress-tray.hide {
     transform: translateY(100%);
     opacity: 0;
 }
+
 
 @keyframes spin {
     0% { transform: rotate(0deg); }

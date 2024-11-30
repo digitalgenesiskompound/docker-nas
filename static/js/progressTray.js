@@ -1,28 +1,39 @@
 // progressTray.js
 
+// Ensure the App namespace exists
+var App = App || {};
+
+// Function to set up the Progress Tray toggle functionality
 App.setupProgressTray = function() {
     const toggleButton = document.getElementById('toggle-progress-tray');
     const progressList = document.getElementById('progress-list');
+    const progressTray = document.getElementById('progress-tray');
 
     toggleButton.addEventListener('click', () => {
-        if (progressList.style.display === 'none' || progressList.style.display === '') {
-            progressList.style.display = 'block';
-            toggleButton.innerHTML = '<i class="bi bi-chevron-down"></i> Progress';
+        if (progressTray.classList.contains('show')) {
+            progressTray.classList.remove('show');
+            progressTray.classList.add('hide');
+            toggleButton.innerHTML = '<i class="bi bi-chevron-up"></i> Show Progress';
         } else {
-            progressList.style.display = 'none';
-            toggleButton.innerHTML = '<i class="bi bi-chevron-up"></i> Progress';
+            progressTray.classList.remove('hide');
+            progressTray.classList.add('show');
+            toggleButton.innerHTML = '<i class="bi bi-chevron-down"></i> Hide Progress';
         }
     });
 };
 
-App.addProgressBar = function(id, type, name) {
+// Function to add a new progress bar to the Progress Tray
+App.addProgressBar = function(id, type, name, indeterminate = false) {
     const progressTray = document.getElementById('progress-tray');
     const progressList = document.getElementById('progress-list');
+    const toggleButton = document.getElementById('toggle-progress-tray'); // Define toggleButton here
 
-    // Always show the progress-tray when adding a new progress bar
-    progressTray.style.display = 'block';
-    progressList.style.display = 'block'; // Ensure the list is visible
-    document.getElementById('toggle-progress-tray').innerHTML = '<i class="bi bi-chevron-down"></i> Progress';
+    // Show the tray if it's hidden
+    if (!progressTray.classList.contains('show')) {
+        progressTray.classList.remove('hide');
+        progressTray.classList.add('show');
+        toggleButton.innerHTML = '<i class="bi bi-chevron-down"></i> Hide Progress';
+    }
 
     const progressItem = document.createElement('div');
     progressItem.className = 'progress-item';
@@ -38,11 +49,14 @@ App.addProgressBar = function(id, type, name) {
     const progressBar = document.createElement('div');
     progressBar.className = 'progress-bar';
     progressBar.id = `progress-bar-${id}`;
+    if (indeterminate) {
+        progressBar.classList.add('indeterminate');
+    }
 
     const progressText = document.createElement('span');
     progressText.className = 'progress-text';
     progressText.id = `progress-text-${id}`;
-    progressText.textContent = '0%';
+    progressText.textContent = indeterminate ? 'Loading...' : '0%';
 
     progressContainer.appendChild(progressBar);
     progressContainer.appendChild(progressText);
@@ -59,6 +73,24 @@ App.addProgressBar = function(id, type, name) {
     progressList.appendChild(progressItem);
 };
 
+// Function to update an existing progress bar
+App.updateProgressBar = function(id, value, indeterminate = false) {
+    const progressItem = document.getElementById(`progress-${id}`);
+    if (progressItem) {
+        const progressBar = progressItem.querySelector('.progress-bar');
+        const progressText = progressItem.querySelector('.progress-text');
+        if (indeterminate) {
+            progressBar.classList.add('indeterminate');
+            progressText.textContent = 'Loading...';
+        } else {
+            progressBar.classList.remove('indeterminate');
+            progressBar.style.width = `${value}%`;
+            progressText.textContent = `${value}%`;
+        }
+    }
+};
+
+// Function to remove a progress bar
 App.removeProgressBar = function(id) {
     const progressItem = document.getElementById(`progress-${id}`);
     if (progressItem) {
@@ -69,6 +101,9 @@ App.removeProgressBar = function(id) {
     const progressList = document.getElementById('progress-list');
     if (progressList.children.length === 0) {
         const progressTray = document.getElementById('progress-tray');
-        progressTray.style.display = 'none';
+        progressTray.classList.remove('show');
+        progressTray.classList.add('hide');
+        const toggleButton = document.getElementById('toggle-progress-tray');
+        toggleButton.innerHTML = '<i class="bi bi-chevron-up"></i> Show Progress';
     }
 };

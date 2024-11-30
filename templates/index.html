@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Docker Volume Explorer</title>
     
     <!-- Load Bootstrap CSS first -->
@@ -15,7 +14,7 @@
     
     <!-- Load custom styles after Bootstrap -->
     <link rel="stylesheet" type="text/css" href="/static/css/styles.css">
-    
+
     <!-- Monaco Editor CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.1/min/vs/loader.min.js"></script>
 </head>
@@ -150,16 +149,14 @@
 </div>
 
 <!-- Progress Tray -->
-<div id="progress-tray" class="progress-tray">
+<div id="progress-tray" class="progress-tray hide">
     <button id="toggle-progress-tray" class="toggle-tray-button">
-        <i class="bi bi-chevron-up"></i> Progress
+        <i class="bi bi-chevron-up"></i> Show Progress
     </button>
     <div id="progress-list" class="progress-list">
         <!-- Individual progress bars will be dynamically added here -->
     </div>
 </div>
-
-    <!-- Reference to External JavaScript Files -->
     <!-- Load main.js first to define App -->
     <script src="/static/js/main.js"></script>
     <!-- Then load utils.js, which may extend App -->

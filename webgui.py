@@ -463,34 +463,49 @@ def download_all():
 @login_required
 def download_selected():
     try:
-        # Determine content type
+        # Log request headers for debugging
+        app.logger.debug(f"Request Headers: {request.headers}")
+
+        # Initialize selected_paths
+        selected_paths = []
+
+        # Determine content type and extract selected_paths accordingly
         if request.is_json:
-            selected_paths = request.get_json().get('selected_paths', [])
+            # Handle AJAX JSON request
+            data = request.get_json()
+            selected_paths = data.get('selected_paths', [])
+            app.logger.debug(f"Request JSON Data: {data}")
         else:
-            # Handle form data
+            # Handle form submission
             selected_paths = request.form.getlist('selected_paths')
-    
+            app.logger.debug(f"Request Form Data: {selected_paths}")
+
         app.logger.debug(f"Received selected_paths: {selected_paths}")
-    
+
         if not selected_paths:
             app.logger.error("No files or directories selected for download.")
             return jsonify({'error': 'No files or directories selected for download.'}), 400
-    
+
         username = current_user.id
         absolute_paths = [secure_path(path) for path in selected_paths]
-    
+
         app.logger.info(f"Creating ZIP for selected items: {selected_paths}")
-    
+
         # Single item download
         if len(absolute_paths) == 1:
             selected_path = absolute_paths[0]
             if os.path.isfile(selected_path):
                 app.logger.info(f"Serving single file: {selected_path}")
-                return send_file(
+                response = send_file(
                     selected_path,
+                    mimetype='application/octet-stream',  # Force generic MIME type
                     as_attachment=True,
-                    download_name=os.path.basename(selected_path)
+                    download_name=os.path.basename(selected_path),
+                    conditional=True
                 )
+                # Add 'X-Content-Type-Options' header
+                response.headers['X-Content-Type-Options'] = 'nosniff'
+                return response
             elif os.path.isdir(selected_path):
                 zip_buffer = io.BytesIO()
                 with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
@@ -503,18 +518,20 @@ def download_selected():
                 zip_buffer.seek(0)
                 zip_filename = f"{username}-{os.path.basename(selected_path)}.zip"
                 app.logger.info(f"Serving ZIP file: {zip_filename}")
-                return Response(
+                response = Response(
                     zip_buffer,
                     mimetype='application/zip',
                     headers={
-                        'Content-Disposition': f'attachment; filename={zip_filename}',
-                        'Content-Length': str(zip_buffer.getbuffer().nbytes)
+                        'Content-Disposition': f'attachment; filename="{zip_filename}"',  # Enclose filename in quotes
+                        'Content-Length': str(zip_buffer.getbuffer().nbytes),
+                        'X-Content-Type-Options': 'nosniff'  # Prevent MIME type sniffing
                     }
                 )
+                return response
             else:
                 app.logger.error(f"Selected path is neither a file nor a directory: {selected_path}")
                 return jsonify({'error': "Selected path is neither a file nor a directory."}), 400
-    
+
         # Multiple items download as ZIP
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
@@ -530,22 +547,25 @@ def download_selected():
                             relative_path = os.path.relpath(file_path, VOLUME).replace("\\", "/")
                             zip_file.write(file_path, relative_path)
                             app.logger.debug(f"Added to ZIP: {relative_path}")
-    
+
         zip_buffer.seek(0)
         zip_filename = f"{username}-selected.zip"
         app.logger.info(f"Serving ZIP file: {zip_filename}")
-        return Response(
+        response = Response(
             zip_buffer,
             mimetype='application/zip',
             headers={
-                'Content-Disposition': f'attachment; filename={zip_filename}',
-                'Content-Length': str(zip_buffer.getbuffer().nbytes)
+                'Content-Disposition': f'attachment; filename="{zip_filename}"',  # Enclose filename in quotes
+                'Content-Length': str(zip_buffer.getbuffer().nbytes),
+                'X-Content-Type-Options': 'nosniff'  # Prevent MIME type sniffing
             }
         )
-    
+        return response
+
     except Exception as e:
         app.logger.exception(f"Error creating ZIP for selected items: {e}")
         return jsonify({'error': 'An error occurred while creating ZIP.', 'message': str(e)}), 500
+
 
 @app.route('/api/get_file_content', methods=['GET'])
 @login_required

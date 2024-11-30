@@ -124,7 +124,10 @@ App.downloadSingleFileXHR = function(path) {
     xhr.onprogress = function(event) {
         if (event.lengthComputable) {
             const percentComplete = ((event.loaded / event.total) * 100).toFixed(2);
-            App.updateProgressBar(id, percentComplete);
+            App.updateProgressBar(id, percentComplete, false);
+        } else {
+            // Indeterminate progress
+            App.updateProgressBar(id, 0, true);
         }
     };
 
@@ -195,7 +198,10 @@ App.downloadMultipleItemsXHR = function(paths) {
     xhr.onprogress = function(event) {
         if (event.lengthComputable) {
             const percentComplete = ((event.loaded / event.total) * 100).toFixed(2);
-            App.updateProgressBar(id, percentComplete);
+            App.updateProgressBar(id, percentComplete, false);
+        } else {
+            // Indeterminate progress
+            App.updateProgressBar(id, 0, true);
         }
     };
 
@@ -252,21 +258,25 @@ App.downloadMultipleItemsXHR = function(paths) {
 App.downloadViaForm = function(paths, formId) {
     // Create a unique form ID
     const uniqueFormId = formId || `download-form-${Date.now()}`;
-
+    
     // Create form element
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = '/download_selected';
-    form.target = '_blank'; // Open in a new tab/window
-
+    form.target = '_self'; // Submit in the same tab for better iOS compatibility
+    
     // Add CSRF token as a hidden input
     const csrfToken = App.getCSRFToken();
+    if (!csrfToken) {
+        alert('CSRF token not found. Cannot initiate download.');
+        return;
+    }
     const csrfInput = document.createElement('input');
     csrfInput.type = 'hidden';
-    csrfInput.name = 'csrf_token'; // Changed from 'X-CSRFToken' to 'csrf_token'
+    csrfInput.name = 'csrf_token'; // Must match Flask-WTF's expectations
     csrfInput.value = csrfToken;
     form.appendChild(csrfInput);
-
+    
     // Add selected_paths as hidden inputs
     paths.forEach(path => {
         const input = document.createElement('input');
@@ -275,19 +285,20 @@ App.downloadViaForm = function(paths, formId) {
         input.value = path;
         form.appendChild(input);
     });
-
+    
     // Append form to body
     document.body.appendChild(form);
-
+    
     // Submit the form
     form.submit();
-
+    
     // Remove the form after submission
     document.body.removeChild(form);
-
+    
     // Notify user for iOS devices
-    alert('Your download should begin shortly. Please check your downloads or the new tab.');
+    alert('Your download should begin shortly. Please check your downloads.');
 };
+
 
 // -------------------------------------
 // Upload Functions
@@ -322,7 +333,10 @@ App.uploadFiles = function() {
         xhr.upload.onprogress = function(event) {
             if (event.lengthComputable) {
                 const percentComplete = ((event.loaded / event.total) * 100).toFixed(2);
-                App.updateProgressBar(id, percentComplete);
+                App.updateProgressBar(id, percentComplete, false);
+            } else {
+                // Indeterminate progress
+                App.updateProgressBar(id, 0, true);
             }
         };
 
@@ -385,7 +399,7 @@ App.uploadFolders = function() {
     }
 
     const id = App.generateUniqueId();
-    App.addProgressBar(id, 'upload', 'Folder Upload');
+    App.addProgressBar(id, 'upload', 'Folder Upload', true); // Set as indeterminate
 
     const xhr = new XMLHttpRequest();
     App.activeUploadXHRs[id] = xhr; // Assign to activeUploadXHRs for cancellation
@@ -398,7 +412,10 @@ App.uploadFolders = function() {
     xhr.upload.onprogress = function(event) {
         if (event.lengthComputable) {
             const percentComplete = ((event.loaded / event.total) * 100).toFixed(2);
-            App.updateProgressBar(id, percentComplete);
+            App.updateProgressBar(id, percentComplete, false);
+        } else {
+            // Indeterminate progress
+            App.updateProgressBar(id, 0, true);
         }
     };
 
@@ -521,51 +538,6 @@ App.resetAllProgressBars = function() {
 // Function to generate a unique ID (for progress bars)
 App.generateUniqueId = function() {
     return 'id-' + Math.random().toString(36).substr(2, 16);
-};
-
-// Function to add a progress bar to the UI
-App.addProgressBar = function(id, type, name) {
-    const progressList = document.getElementById('progress-list');
-    const progressItem = document.createElement('div');
-    progressItem.id = id;
-    progressItem.className = 'progress-item';
-
-    const label = document.createElement('span');
-    label.textContent = `${type.toUpperCase()}: ${name}`;
-    progressItem.appendChild(label);
-
-    const progressBar = document.createElement('progress');
-    progressBar.value = 0;
-    progressBar.max = 100;
-    progressItem.appendChild(progressBar);
-
-    const cancelButton = document.createElement('button');
-    cancelButton.textContent = 'Cancel';
-    cancelButton.onclick = function() {
-        App.cancelOperation(id, type);
-    };
-    progressItem.appendChild(cancelButton);
-
-    progressList.appendChild(progressItem);
-};
-
-// Function to update a progress bar's value
-App.updateProgressBar = function(id, value) {
-    const progressItem = document.getElementById(id);
-    if (progressItem) {
-        const progressBar = progressItem.querySelector('progress');
-        if (progressBar) {
-            progressBar.value = value;
-        }
-    }
-};
-
-// Function to remove a progress bar from the UI
-App.removeProgressBar = function(id) {
-    const progressItem = document.getElementById(id);
-    if (progressItem) {
-        progressItem.remove();
-    }
 };
 
 // Function to show or hide a loading indicator

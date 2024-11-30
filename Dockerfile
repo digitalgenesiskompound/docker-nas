@@ -18,4 +18,5 @@ ENV FLASK_APP=webgui.py
 ENV FLASK_RUN_HOST=0.0.0.0
 
 # Run the application.
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "6", "--threads", "4", "--timeout", "300", "webgui:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "6", "--worker-class", "gevent", "--threads", "4", "--timeout", "300", "webgui:app"]
+
