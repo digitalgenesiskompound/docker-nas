@@ -37,7 +37,8 @@ cp .env.example .env
 
 Edit the `.env` file to configure:
 - `SECRET_KEY`: A secure secret key for your application.
-*Command to create a random 32 character string*
+
+*Command to create a random 32 character string:*
 ```
 openssl rand -hex 32
 ```
