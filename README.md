@@ -9,6 +9,7 @@ It provides a user-friendly web interface to upload, delete, list, and download 
 
 - **User Authentication:** Secure login/logout and password management.
 - **File Management:** Upload, delete, download, add, or edit files and directories.
+- **Text Editor:** Edit text files in multiple different formats using a VSCode style editor.
 - **Dockerized:** Easy setup and deployment with Docker Compose.
 
 ---
