@@ -56,7 +56,7 @@ HOST_PATH=/home/user/mydirectory/forstuff
 ### 3. Start the Application
 Use Docker Compose to build and start the application:
 ```bash
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 ---
@@ -74,7 +74,7 @@ Login or register to start managing your files.
 ## Stopping the Application
 To stop the application run:
 ```bash
-docker-compose down
+docker compose down
 ```
 
 ---
