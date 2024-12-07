@@ -23,8 +23,8 @@ It provides a user-friendly web interface to upload, delete, list, and download 
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/digitalgenesiskompound/docker-nas.git
-cd docker-nas
+git clone https://github.com/digitalgenesiskompound/dve.git
+cd dve
 ```
 
 ---
