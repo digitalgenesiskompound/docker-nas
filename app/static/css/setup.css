@@ -1,0 +1,95 @@
+/* Wrapper for Setup Page */
+.auth-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background-color: #1f1f1f;
+}
+
+/* DVE Logo */
+.custom-icon {
+    width: 70px; /* Adjust width to fit your design */
+    height: auto; /* Maintain aspect ratio */
+    margin-right: 7px; /* Space between the icon and text */
+    vertical-align: text-bottom /* Align it with the text */
+}
+
+/* Container for Setup Form */
+.auth-container {
+    background-color: #2c2c2c; 
+    padding: 40px;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    width: 100%;
+    max-width: 400px;
+    color: #e0e0e0;
+}
+
+/* Headings */
+.auth-container h1,
+.auth-container h4 {
+    color: #ffffff;
+}
+
+/* Form Labels */
+.auth-container .form-label {
+    color: #e0e0e0;
+}
+
+/* Form Controls */
+.auth-container .form-control {
+    background-color: #3a3a3a;
+    color: #ffffff;
+    border: 1px solid #555555;
+}
+
+.auth-container .form-control::placeholder {
+    color: #a0a0a0;
+}
+
+/* Submit Button */
+.btn-submit {
+    background-color: #ffffff;
+    color: #6c757d;
+    border: 1px solid #6c757d;
+    transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+    padding: 10px 15px;
+    border-radius: 6px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.btn-submit:hover {
+    background-color: #e0e0e0; 
+    color: #5a6268;
+    border-color: #5a6268; 
+}
+
+/* Validation Messages */
+.validation-message {
+    color: #e74c3c;
+    font-size: 0.85em;
+    margin-top: 5px;
+}
+
+/* Password Requirements List */
+.password-requirements {
+    list-style: none;
+    padding-left: 0;
+    margin-top: 10px;
+    color: #a0a0a0;
+    font-size: 0.85em;
+}
+
+.password-requirements li {
+    margin-bottom: 5px;
+}
+
+.password-requirements li.valid {
+    color: #4caf50; 
+}
+
+.password-requirements li.invalid {
+    color: #e74c3c; 
+}
