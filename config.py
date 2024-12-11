@@ -23,10 +23,8 @@ class Config:
     LOG_FILE = os.getenv("LOG_FILE", "app.log")
     REMEMBER_COOKIE_DURATION = 3  # days
 
-    # Convert HTTPS environment variable to boolean
     HTTPS = str_to_bool(os.getenv("HTTPS", "False"))
 
-    # Set SameSite and Secure attributes based on HTTPS
     if HTTPS:
         SESSION_COOKIE_SAMESITE = 'None'
         SESSION_COOKIE_SECURE = True
