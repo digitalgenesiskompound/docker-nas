@@ -1,5 +1,9 @@
+<img src="https://github.com/user-attachments/assets/c74fb1d4-6daa-44a1-8214-52a0f98a78b6" alt="dve-nobg" width="175"/>
+
 # Docker Volume Explorer: A Simple Web-Based File Manager
+
 ![Screenshot 2024-12-07 151859](https://github.com/user-attachments/assets/fe2dc8c2-6cc7-4251-89d8-c3a7debb68c7)
+
 Docker Volume Explorer (DVE) is a lightweight, Flask-based web application for managing files inside a Docker volume or any files from the host system that the Docker container is hosted on. 
 It provides a user-friendly web interface to upload, delete, list, and download files.
 
